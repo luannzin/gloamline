@@ -34,8 +34,12 @@ import {
 import * as THREE from "three/webgpu";
 import type { MoodState } from "./mood";
 import { fieldTint } from "./terrain";
+import type { GroundTex } from "./textures";
 
 const ROWS = 5;
+/** the clump lattice's turn off the world axes */
+const TC = Math.cos(0.5),
+  TS = Math.sin(0.5);
 
 /** One clump: `BLADES` strips of ROWS rows. Attributes: blade index, row (0 root .. 1 tip), side (-1, 1). */
 function clump(BLADES: number) {
@@ -76,34 +80,34 @@ function clump(BLADES: number) {
   return g;
 }
 
-export function makeGrass(
-  tex: { height: THREE.DataTexture; ground0: THREE.Texture; ground1: THREE.Texture },
-  detail: THREE.Texture,
-  mood: MoodState,
-  quality: number,
-) {
-  const side = [0, 140, 200, 270][quality],
-    step = [0, 0.38, 0.3, 0.28][quality];
+export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState, quality: number) {
+  const side = [0, 128, 220, 290][quality],
+    step = [0, 0.34, 0.27, 0.25][quality];
   const reach = side * step * 0.5;
   const origin = uniform(new THREE.Vector2());
   const m = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide });
 
   // --- the clump: where it stands, how tall the ground lets it be
+  // the lattice is turned off the world's axes (and the jitter is a whole cell), so no row of
+  // clumps ever lines up with a road, a wall or the way the wind combs the field
   const id = float(instanceIndex);
   const gx = id.mod(side),
     gz = floor(id.div(side));
-  const wx = origin.x.add(gx.sub(side / 2).mul(step)),
-    wz = origin.y.add(gz.sub(side / 2).mul(step));
-  const cell = vec2(floor(wx.div(step).add(0.5)), floor(wz.div(step).add(0.5)));
-  const c1 = hash(cell.x.mul(12.9898).add(cell.y.mul(78.233))),
-    c2 = hash(cell.x.mul(39.34).add(cell.y.mul(11.13)).add(7));
-  // a whole cell of jitter, so clumps never line up in rows
-  const cx = wx.add(c1.sub(0.5).mul(step * 1.6)),
-    cz = wz.add(
+  const lx = origin.x.add(gx.sub(side / 2).mul(step)),
+    lz = origin.y.add(gz.sub(side / 2).mul(step));
+  const cell = vec2(floor(lx.div(step).add(0.5)), floor(lz.div(step).add(0.5)));
+  // (nested, not a hash of a weighted sum: that one is constant along lines through the lattice)
+  const hy = hash(cell.y.mul(1.618).add(0.31));
+  const c1 = hash(cell.x.add(hy.mul(4096))),
+    c2 = hash(cell.x.mul(1.37).add(hy.mul(8191)).add(7));
+  const jx = lx.add(c1.sub(0.5).mul(step * 1.7)),
+    jz = lz.add(
       hash(c1.mul(71.3).add(c2.mul(13.7)))
         .sub(0.5)
-        .mul(step * 1.6),
+        .mul(step * 1.7),
     );
+  const cx = jx.mul(TC).sub(jz.mul(TS)),
+    cz = jx.mul(TS).add(jz.mul(TC));
   const guv = vec2(cx, cz)
     .add(HALF + 0.5)
     .div(SIZE);
@@ -112,7 +116,7 @@ export function makeGrass(
   const nx = g1.z.mul(2).sub(1),
     nz = g1.w.mul(2).sub(1),
     ny = max(float(1).sub(nx.mul(nx)).sub(nz.mul(nz)), 0.05).sqrt();
-  const tall = g0.x.mul(0.55).add(g0.y.mul(0.85)).add(g0.z.mul(0.6)).add(g0.w.mul(0.78));
+  const tall = g0.x.mul(0.5).add(g0.y.mul(0.8)).add(g0.z.mul(0.55)).add(g0.w.mul(0.55));
   const allowed = float(1)
     .sub(g1.x)
     .mul(float(1).sub(smoothstep(0.12, 0.45, g1.y)))
@@ -161,8 +165,13 @@ export function makeGrass(
     .mul(patchLen)
     .mul(flower.mul(0.35).add(1))
     .mul(shown);
-  const az = r2.mul(6.2832).add(r1.mul(2));
-  const tilt = r3.mul(0.35).add(0.08);
+  // the wind has combed the field: most blades lean its way, a few any way
+  const az = mix(
+    r2.mul(6.2832).add(r1.mul(2)),
+    float(0.64).add(r2.sub(0.5).mul(1.6)),
+    r1.greaterThan(0.3).select(float(0.75), float(0)),
+  );
+  const tilt = r3.mul(0.5).add(0.18);
   const d = vec3(sin(tilt).mul(cos(az)), cos(tilt), sin(tilt).mul(sin(az)));
   const pe = vec3(cos(tilt).mul(cos(az)), sin(tilt).negate(), cos(tilt).mul(sin(az)));
   const sd = vec3(sin(az).negate(), 0, cos(az));
@@ -246,18 +255,28 @@ export function makeGrass(
     headV = varying(head.mul(flower));
   const albedo = Fn(() => {
     const base = mix(tintV, dry, seed.mul(seed).mul(0.5)).toVar();
-    base.mulAssign(mix(float(0.45), float(1.25), vv.pow(0.7)));
+    base.mulAssign(mix(float(0.62), float(1.2), vv.pow(0.7)));
     return mix(base.mul(mix(float(0.85), float(1.1), seed)), petalV, headV);
   })();
   m.colorNode = albedo;
   // matte: a sky-blue sheen on every blade reads as plastic
   m.roughnessNode = float(0.82);
+  // the sky reaches the tips, barely the roots, and less of it under the trees
+  const canopy = varying(texture(tex.canopy, guv).level(float(0)).x);
+  m.aoNode = vv
+    .mul(0.6)
+    .add(0.4)
+    .mul(float(1).sub(canopy.mul(0.6)));
   // light through the blades toward the sun
   const view = normalize(positionWorld.sub(cameraPosition));
   const back = pow(max(dot(view, mood.u.sunDir), 0), 3)
     .mul(0.85)
     .add(0.08);
-  m.emissiveNode = albedo.mul(mood.u.sunColor).mul(back.mul(mood.u.sunPower).mul(0.18)).mul(vv);
+  m.emissiveNode = albedo
+    .mul(mood.u.sunColor)
+    .mul(back.mul(mood.u.sunPower).mul(0.18))
+    .mul(vv)
+    .mul(float(1).sub(canopy.mul(0.5)));
 
   const mesh = new THREE.Mesh(clump(quality > 2 ? 9 : 7), m);
   mesh.count = side * side;
@@ -266,7 +285,10 @@ export function makeGrass(
   return {
     mesh,
     update(p: THREE.Vector3) {
-      origin.value.set(Math.round(p.x / step) * step, Math.round(p.z / step) * step);
+      // snapped in the lattice's own (turned) frame, so a clump keeps its spot as the camera moves
+      const lx = p.x * TC + p.z * TS,
+        lz = -p.x * TS + p.z * TC;
+      origin.value.set(Math.round(lx / step) * step, Math.round(lz / step) * step);
     },
   };
 }

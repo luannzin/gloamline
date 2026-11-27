@@ -1,6 +1,6 @@
 // Every texture is made here at load: the ground data from the world build, one tileable detail
 // noise that every material samples at several scales, and a foliage atlas drawn on a canvas.
-import { rng, SIZE, type World } from "@gloamline/world";
+import { rng, SIZE, WEAR, type World } from "@gloamline/world";
 import * as THREE from "three/webgpu";
 
 export function groundTextures(w: World) {
@@ -15,7 +15,61 @@ export function groundTextures(w: World) {
     t.needsUpdate = true;
     return t;
   };
-  return { height, ground0: rgba(w.ground.ground0), ground1: rgba(w.ground.ground1), stones: stoneTexture() };
+  // where the rain ran, what it left and what it carried off (world: erosion.ts)
+  const wear = new THREE.DataTexture(w.wear, WEAR, WEAR, THREE.RGBAFormat, THREE.UnsignedByteType);
+  wear.magFilter = THREE.LinearFilter;
+  wear.minFilter = THREE.LinearMipmapLinearFilter;
+  wear.generateMipmaps = true;
+  wear.needsUpdate = true;
+  return {
+    height,
+    ground0: rgba(w.ground.ground0),
+    ground1: rgba(w.ground.ground1),
+    wear,
+    canopy: canopyTexture(w),
+    stones: stoneTexture(),
+  };
+}
+
+export type GroundTex = ReturnType<typeof groundTextures>;
+
+/**
+ * How much canopy is overhead, 512 x 512 (4 m a texel): each oak and pine's crown splatted as a
+ * soft disc and blurred once. The ground and grass under it see less sky, and past the shadow
+ * map's box less sun.
+ */
+function canopyTexture(w: World) {
+  const N = 512,
+    k = N / SIZE,
+    acc = new Float32Array(N * N);
+  const splat = (p: Float32Array, rad: number, amount: number) => {
+    for (let i = 0; i < p.length; i += 5) {
+      const cx = (p[i] + SIZE / 2) * k,
+        cz = (p[i + 2] + SIZE / 2) * k,
+        r = rad * p[i + 4] * k;
+      for (let z = Math.max(0, Math.floor(cz - r)); z <= Math.min(N - 1, Math.ceil(cz + r)); z++)
+        for (let x = Math.max(0, Math.floor(cx - r)); x <= Math.min(N - 1, Math.ceil(cx + r)); x++) {
+          const d = Math.hypot(x + 0.5 - cx, z + 0.5 - cz) / r;
+          if (d < 1) acc[z * N + x] += amount * (1 - d * d);
+        }
+    }
+  };
+  splat(w.props.oak, 6.5, 0.8);
+  splat(w.props.pine, 3.5, 0.6);
+  const out = new Uint8Array(N * N * 4);
+  for (let z = 0; z < N; z++)
+    for (let x = 0; x < N; x++) {
+      let s = 0;
+      for (let j = -1; j <= 1; j++)
+        for (let i = -1; i <= 1; i++)
+          s += acc[Math.min(N - 1, Math.max(0, z + j)) * N + Math.min(N - 1, Math.max(0, x + i))];
+      out[(z * N + x) * 4] = Math.min(255, (s / 9) * 255);
+    }
+  const t = new THREE.DataTexture(out, N, N, THREE.RGBAFormat, THREE.UnsignedByteType);
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  return t;
 }
 
 /**
@@ -142,61 +196,98 @@ export function stoneTexture() {
   return t;
 }
 
-/** 2 x 2 atlas, 512 px cells: broadleaf cluster, pine spray, fern frond, hanging moss. */
-export function foliageAtlas() {
+/**
+ * 2 x 2 atlas: broadleaf twigs, pine spray, fern frond, hanging moss. Drawn in 512-unit cells and
+ * scaled to `cell` pixels (1024 on Medium and up, so a leaf near the eye is still a leaf).
+ */
+export function foliageAtlas(cell = 1024) {
   const S = 512,
     cv = document.createElement("canvas");
-  cv.width = cv.height = S * 2;
+  cv.width = cv.height = cell * 2;
   const g = cv.getContext("2d")!;
+  g.scale(cell / S, cell / S);
   const r = rng(11);
   const hsl = (h: number, s: number, l: number, a = 1) => `hsla(${h},${s}%,${l}%,${a})`;
-  const leaf = (x: number, y: number, len: number, wid: number, ang: number, col: string) => {
+  /** A leaf from its stalk at (x, y): lit on one side, a pale midrib, a darker edge. */
+  const leaf = (
+    x: number,
+    y: number,
+    len: number,
+    wid: number,
+    ang: number,
+    h: number,
+    s: number,
+    l: number,
+  ) => {
     g.save();
     g.translate(x, y);
     g.rotate(ang);
-    g.fillStyle = col;
+    const grd = g.createLinearGradient(0, -wid, 0, wid);
+    grd.addColorStop(0, hsl(h, s, l + 9));
+    grd.addColorStop(0.55, hsl(h, s, l));
+    grd.addColorStop(1, hsl(h + 4, s + 6, l - 8));
+    g.fillStyle = grd;
     g.beginPath();
     g.moveTo(0, 0);
-    g.quadraticCurveTo(len * 0.5, -wid, len, 0);
-    g.quadraticCurveTo(len * 0.5, wid, 0, 0);
+    g.bezierCurveTo(len * 0.22, -wid * 1.15, len * 0.72, -wid * 0.95, len, 0);
+    g.bezierCurveTo(len * 0.7, wid * 0.95, len * 0.28, wid * 1.1, 0, 0);
     g.fill();
-    g.strokeStyle = "rgba(0,0,0,0.18)";
-    g.lineWidth = 1;
+    g.strokeStyle = "rgba(0,0,0,0.22)";
+    g.lineWidth = 0.8;
+    g.stroke();
+    g.strokeStyle = hsl(h - 10, s - 10, l + 16, 0.5);
+    g.lineWidth = 1.1;
     g.beginPath();
     g.moveTo(0, 0);
-    g.lineTo(len * 0.9, 0);
+    g.lineTo(len * 0.88, 0);
+    for (let v = 0.2; v < 0.8; v += 0.15) {
+      g.moveTo(len * v, 0);
+      g.lineTo(len * (v + 0.12), -wid * 0.6);
+      g.moveTo(len * v, 0);
+      g.lineTo(len * (v + 0.12), wid * 0.6);
+    }
     g.stroke();
     g.restore();
   };
-  // broadleaf cluster: twigs radiating, leaves along them
-  g.save();
-  for (let i = 0; i < 26; i++) {
-    const a = r() * Math.PI * 2,
-      L = 120 + r() * 120;
-    const x0 = S / 2 + Math.cos(a) * 30,
-      y0 = S / 2 + Math.sin(a) * 30;
-    g.strokeStyle = hsl(30, 25, 18);
-    g.lineWidth = 3;
-    g.beginPath();
-    g.moveTo(S / 2, S / 2);
-    g.lineTo(x0 + Math.cos(a) * L, y0 + Math.sin(a) * L);
-    g.stroke();
-    for (let k = 0; k < 7; k++) {
-      const t = 0.25 + k * 0.11,
-        x = S / 2 + Math.cos(a) * L * t,
-        y = S / 2 + Math.sin(a) * L * t;
-      const side = k % 2 ? 1 : -1;
-      leaf(
-        x,
-        y,
-        42 + r() * 26,
-        13 + r() * 6,
-        a + side * (0.6 + r() * 0.5),
-        hsl(78 + r() * 34, 35 + r() * 25, 22 + r() * 22),
-      );
+  // broadleaf: seven twigs fanning up from the card's foot, leaves alternating along them, drawn
+  // back to front so the nearer leaves are lighter (the card reads as a little volume)
+  for (const depth of [0, 1, 2])
+    for (let i = 0; i < 7; i++) {
+      const a = -Math.PI / 2 + (i - 3) * 0.33 + (r() - 0.5) * 0.25,
+        L = 300 + r() * 150;
+      const x0 = S / 2 + (r() - 0.5) * 60,
+        y0 = S - 20;
+      const cx = x0 + Math.cos(a) * L * 0.5 + (r() - 0.5) * 60,
+        cy = y0 + Math.sin(a) * L * 0.5,
+        ex = x0 + Math.cos(a) * L,
+        ey = y0 + Math.sin(a) * L;
+      if (depth === 0) {
+        g.strokeStyle = hsl(28, 22, 16);
+        g.lineWidth = 3.2;
+        g.beginPath();
+        g.moveTo(x0, y0);
+        g.quadraticCurveTo(cx, cy, ex, ey);
+        g.stroke();
+      }
+      for (let k = 0; k < 10; k++) {
+        if ((k + i) % 3 !== depth) continue;
+        const t = 0.18 + k * 0.085,
+          u = 1 - t;
+        const x = u * u * x0 + 2 * u * t * cx + t * t * ex,
+          y = u * u * y0 + 2 * u * t * cy + t * t * ey;
+        const side = k % 2 ? 1 : -1;
+        leaf(
+          x,
+          y,
+          50 + r() * 28 - k * 1.5,
+          15 + r() * 6,
+          a + side * (0.55 + r() * 0.55),
+          84 + r() * 26,
+          34 + r() * 22,
+          20 + depth * 6 + r() * 12,
+        );
+      }
     }
-  }
-  g.restore();
   // pine spray: a branch with needle tufts
   g.save();
   g.translate(S, 0);
@@ -251,7 +342,7 @@ export function foliageAtlas() {
       g.translate(x, y);
       g.rotate(side > 0 ? -0.35 : Math.PI + 0.35);
       for (let q = 0; q < 9; q++)
-        leaf((q * len) / 9, 0, len / 6, 6, side * 0.9, hsl(95 + r() * 20, 40, 22 + r() * 14));
+        leaf((q * len) / 9, 0, len / 6, 6, side * 0.9, 95 + r() * 20, 40, 22 + r() * 14);
       g.restore();
     }
   }

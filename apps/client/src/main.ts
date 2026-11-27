@@ -8,12 +8,14 @@ import { randomSeed } from "@/lib/avatar";
 import { buildWorld } from "./build";
 import { makeFlora } from "./gfx/flora";
 import { makeGrass } from "./gfx/grass";
+import { loadModels } from "./gfx/models";
 import { makeMood } from "./gfx/mood";
 import { makeParticles } from "./gfx/particles";
 import { makePost, type Quality } from "./gfx/post";
 import { makeCave, makeRuins, makeSpire } from "./gfx/stone";
 import { makeTerrain } from "./gfx/terrain";
 import { detailTexture, foliageAtlas, groundTextures } from "./gfx/textures";
+import { makeTowers } from "./gfx/towers";
 import { makeWanderers } from "./gfx/wanderers";
 import { makeWater } from "./gfx/water";
 import { drawMap, toMap } from "./map";
@@ -34,14 +36,20 @@ function pickQuality(): Quality {
   return mem <= 4 ? 1 : 2;
 }
 
-// fixed viewpoints, keys 1-6 (and the screenshot script): x, z, look-at x, y, z, optional y
+// fixed viewpoints, keys 1-9 (and the screenshot script): x, z, look-at x, y, z, optional y
 const VIEWS: number[][] = [
   [-262, 262, -170, 30, 150],
   [292, 292, 430, 2, 430],
   [272, -170, 370, 75, -245],
   [-392, -332, -404, HOLLOW.floor + 30, -380, HOLLOW.floor + 0.2],
-  [52, -456, 70, 120, -790],
+  [40, -446, 70, 120, -790],
   [-352, -148, -364, HOLLOW.floor + 6, -205],
+  // 7: into the low sun through Gloamwood (shafts, leaves lit from behind)
+  [-250, 190, -350, 40, 230],
+  // 8: the keep's courtyard, toward the inner keep
+  [405, -222, 362, 76, -266],
+  // 9: Cinder Keep on its cliff, from the road below
+  [205, -118, 380, 82, -250],
 ];
 
 async function boot() {
@@ -67,7 +75,10 @@ async function boot() {
     if (intervals.length < 120) requestAnimationFrame(probe);
   };
   requestAnimationFrame(probe);
-  const world = await buildWorld(say);
+  const [world, models] = await Promise.all([
+    buildWorld(say),
+    loadModels(["rocks.glb", "trees.glb", "architecture.glb", "wanderer.glb", "spire.glb"]),
+  ]);
   const refresh = intervals.length > 20 ? intervals.sort((a, b) => a - b)[intervals.length >> 1] : 1000 / 60;
   say("Lighting the world…", 0.85);
 
@@ -84,7 +95,7 @@ async function boot() {
   const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 3200);
   const tex = groundTextures(world);
   const detail = detailTexture();
-  const atlas = foliageAtlas();
+  const atlas = foliageAtlas(q > 0 ? 1024 : 512);
   const mood = makeMood(land, world, detail, q);
   scene.add(mood.sun, mood.sun.target, mood.hemi, mood.dome);
   scene.fogNode = mood.fogNode;
@@ -99,17 +110,18 @@ async function boot() {
     scene.environmentIntensity = mood.envIntensity;
   };
   const terrain = makeTerrain(tex, detail, mood, q);
-  const flora = makeFlora(world, { ground0: tex.ground0, detail, atlas }, mood, q);
+  const flora = makeFlora(world, { ground0: tex.ground0, detail, atlas }, mood, q, models);
   const grass = q > 0 ? makeGrass(tex, detail, mood, q) : null;
   const particles = makeParticles(tex.height, mood, q);
-  const wanderers = makeWanderers(camera, document.getElementById("tags")!);
+  const wanderers = makeWanderers(camera, document.getElementById("tags")!, models);
   scene.add(
     terrain.group,
     flora.group,
     particles.group,
     makeRuins(world, detail),
     makeCave(world, detail),
-    makeSpire(world, detail, mood),
+    makeSpire(world, detail, mood, models),
+    makeTowers(world, models, detail),
     makeWater(tex.height, detail, mood, q),
     wanderers.group,
   );

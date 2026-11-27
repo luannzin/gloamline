@@ -12,6 +12,7 @@ import {
   dot,
   Fn,
   float,
+  fract,
   hash,
   instancedDynamicBufferAttribute,
   log2,
@@ -32,10 +33,14 @@ import {
   vec3,
 } from "three/tsl";
 import * as THREE from "three/webgpu";
+import { bump } from "./bump";
+import { type Models, model } from "./models";
 import type { MoodState } from "./mood";
 import * as S from "./shapes";
 
 type Node3 = ReturnType<typeof vec3>;
+type Node2 = THREE.Node<"vec2">;
+type Node4 = THREE.Node<"vec4">;
 type Tex = { ground0: THREE.Texture; detail: THREE.Texture; atlas: THREE.Texture };
 
 /** Instance attributes for one (variant, detail) pair, and the TSL that places a vertex with them. */
@@ -76,10 +81,9 @@ function placed(s: Slot, wind: number, flutter: number) {
     return vec3(c.mul(lp.x).add(sn.mul(lp.z)), lp.y, sn.negate().mul(lp.x).add(c.mul(lp.z))).add(inst.xyz);
   })();
   const nl = normalLocal;
-  const normal = transformNormalToView(
-    vec3(c.mul(nl.x).add(sn.mul(nl.z)), nl.y, sn.negate().mul(nl.x).add(c.mul(nl.z))),
-  );
-  return { position, normal, seed: hash(inst.x.mul(0.37).add(inst.z.mul(1.71))) };
+  const world = vec3(c.mul(nl.x).add(sn.mul(nl.z)), nl.y, sn.negate().mul(nl.x).add(c.mul(nl.z)));
+  const normal = transformNormalToView(world);
+  return { position, normal, world, seed: hash(inst.x.mul(0.37).add(inst.z.mul(1.71))) };
 }
 
 function barkMat(s: Slot, t: Tex, tint: number, wind: number, moss: number) {
@@ -87,34 +91,54 @@ function barkMat(s: Slot, t: Tex, tint: number, wind: number, moss: number) {
   const P = placed(s, wind, 0);
   m.positionNode = P.position;
   m.normalNode = P.normal;
-  const d = texture(t.detail, uv().mul(vec2(1, 0.35)));
-  const d2 = texture(t.detail, uv().mul(vec2(2, 1.1)).add(0.3));
-  const base = color(tint).mul(d.w.mul(0.7).add(0.45)).mul(d2.x.mul(0.5).add(0.75));
+  // bark projected from the sides in the tree's own space (Blender's skinned trunks have no UVs):
+  // the ridge channel stretched up the trunk is the furrows
+  const pl = positionLocal,
+    nl = normalLocal;
+  const wx = nl.x.abs().pow(3),
+    wz = nl.z.abs().pow(3),
+    ws = wx.add(wz).add(0.0001);
+  const side = (k: Node2) =>
+    texture(t.detail, vec2(pl.z, pl.y).mul(k))
+      .mul(wx)
+      .add(texture(t.detail, vec2(pl.x, pl.y).mul(k).add(0.5)).mul(wz))
+      .div(ws);
+  const d = side(vec2(1.4, 0.3));
+  const d2 = side(vec2(3.1, 1.6));
+  // furrows dark and deep, the plates between them lighter
+  const furrow = smoothstep(0.15, 0.65, d.w);
+  const base = color(tint).mul(furrow.mul(0.8).add(0.3)).mul(d2.x.mul(0.5).add(0.75));
   const up = smoothstep(0.1, 0.8, normalLocal.y.add(d2.y.mul(0.5)));
   const low = smoothstep(4, 0.5, positionLocal.y);
   m.colorNode = mix(base, vec3(0.05, 0.085, 0.025).mul(d2.x.add(0.6)), max(up, low).mul(moss));
+  m.normalNode = bump(P.normal as never, furrow.mul(0.035).add(d2.y.mul(0.008)));
   m.roughnessNode = float(0.92);
   return m;
 }
 
-function leafMat(s: Slot, t: Tex, mood: MoodState, colA: number, colB: number, wind: number) {
+function leafMat(s: Slot, t: Tex, mood: MoodState, colA: number, colB: number, wind: number, gold: number) {
+  // (an alpha test, not a hashed alpha: the hash's dither freezes into the cached shadow map)
   const m = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide, alphaTest: 0.42 });
   const P = placed(s, wind, 0.05);
   m.positionNode = P.position;
   m.normalNode = P.normal;
   const tx = texture(t.atlas, uv());
-  const tint = mix(color(colA), color(colB), P.seed);
+  // one tree in six has turned: old gold and rust among the green
+  const turned = smoothstep(0.82, 0.9, P.seed);
+  const tint = mix(mix(color(colA), color(colB), P.seed.mul(1.2).min(1)), color(0xc0782a), turned.mul(gold));
+  // deep in the crown the leaves see less sky
+  const ao = attribute("ao", "float");
   const albedo = tx.rgb.mul(tint).mul(2.2);
-  m.colorNode = albedo;
+  m.colorNode = albedo.mul(ao);
   // the small mips average the gaps into the leaves and an alpha test eats them: lift alpha by the
   // mip level (Golus), so a far crown stays as full as a near one
-  const tuv = uv().mul(1024);
+  const tuv = uv().mul((t.atlas.image as HTMLCanvasElement).width);
   const lod = max(log2(max(dot(dFdx(tuv), dFdx(tuv)), dot(dFdy(tuv), dFdy(tuv)))).mul(0.5), 0);
   m.opacityNode = tx.a.mul(lod.mul(0.25).add(1));
-  // light through the leaves when looking toward the sun
+  // light through the leaves when looking toward the sun, mostly through the outer ones
   const v = normalize(positionWorld.sub(cameraPosition));
   const back = pow(max(dot(v, mood.u.sunDir), 0), 3);
-  m.emissiveNode = albedo.mul(mood.u.sunColor).mul(back.mul(mood.u.sunPower).mul(0.12));
+  m.emissiveNode = albedo.mul(mood.u.sunColor).mul(back.mul(mood.u.sunPower).mul(0.14)).mul(ao.mul(ao));
   m.roughnessNode = float(0.75);
   return m;
 }
@@ -138,27 +162,71 @@ function bladeMat(s: Slot, mood: MoodState) {
   return m;
 }
 
-function stoneMat(s: Slot, t: Tex, tint: number, mossy: boolean) {
+/**
+ * Stone, projected three ways in world space so big rocks and their neighbours share one grain:
+ * a coarse and a fine fetch per face for colour, a relief from the coarse one's slope for the normal,
+ * beds on the faces, lichen and (where it's damp) moss on what faces the sky.
+ */
+/** `near`: the full shader; far off, one projection's worth of fetches and no relief. */
+function stoneMat(s: Slot, t: Tex, tint: number, mossy: boolean, near: boolean) {
   const m = new THREE.MeshStandardNodeMaterial();
   const P = placed(s, 0, 0);
   m.positionNode = P.position;
-  m.normalNode = P.normal;
   const wp = positionWorld;
-  const a = texture(t.detail, wp.xz.mul(0.31)),
-    b = texture(t.detail, wp.xy.mul(0.47).add(0.2)),
-    c = texture(t.detail, wp.zy.mul(0.47).add(0.6));
-  const n = a.x.add(b.y).add(c.x).div(3);
-  const base = color(tint).mul(n.mul(0.9).add(0.55)).mul(P.seed.mul(0.3).add(0.85));
+  const nw = P.world;
+  const tw0 = nw.abs().pow(vec3(4)),
+    tw = tw0.div(tw0.x.add(tw0.y).add(tw0.z));
+  const tri = (k: number, o: number) => {
+    const X = texture(t.detail, wp.zy.mul(k).add(o)),
+      Y = texture(t.detail, wp.xz.mul(k).add(o + 0.3)),
+      Z = texture(t.detail, wp.xy.mul(k).add(o + 0.6));
+    return {
+      X,
+      Y,
+      Z,
+      mix: (f: (v: typeof X) => Node3["x"]) => f(X).mul(tw.x).add(f(Y).mul(tw.y)).add(f(Z).mul(tw.z)),
+    };
+  };
+  const big = tri(0.3, 0),
+    fine = near ? tri(1.4, 0.17) : big;
+  const n = big.mix((v) => v.x),
+    g = fine.mix((v) => v.y),
+    cell = fine.mix((v) => v.z);
+  // beds on the faces, broken by the noise
+  const beds = smoothstep(0.35, 0.65, fract(wp.y.mul(1.2).add(n.mul(1.6)))).mul(float(1).sub(tw.y));
+  const base = color(tint)
+    .mul(0.75)
+    .mul(n.mul(0.9).add(0.5))
+    .mul(g.mul(0.5).add(0.75))
+    .mul(mix(float(1), float(0.72), beds))
+    .mul(P.seed.mul(0.25).add(0.85));
+  // relief: the slope of the coarse noise on each face, bent back into world space
+  const e = 1 / 512;
+  const grad = (uvf: Node2, v: Node4) =>
+    vec2(
+      texture(t.detail, uvf.add(vec2(e, 0))).x.sub(v.x),
+      texture(t.detail, uvf.add(vec2(0, e))).x.sub(v.x),
+    ).mul(22);
+  const gX = grad(wp.zy.mul(0.3), big.X),
+    gY = grad(wp.xz.mul(0.3).add(0.3), big.Y),
+    gZ = grad(wp.xy.mul(0.3).add(0.6), big.Z);
+  const bump = vec3(
+    gY.x.mul(tw.y).add(gZ.x.mul(tw.z)),
+    gX.y.mul(tw.x).add(gZ.y.mul(tw.z)),
+    gX.x.mul(tw.x).add(gY.y.mul(tw.y)),
+  );
+  m.normalNode = near ? transformNormalToView(normalize(nw.sub(bump.mul(0.6)))) : P.normal;
+  const up = smoothstep(0.45, 0.85, nw.y.add(g.sub(0.5).mul(0.5)));
+  const lichen = smoothstep(0.62, 0.8, cell.add(n.mul(0.3))).mul(up.add(0.25).min(1));
+  const stone = mix(base, mix(vec3(0.16, 0.16, 0.1), vec3(0.2, 0.11, 0.05), P.seed), lichen.mul(0.4));
+  m.roughnessNode = float(0.88);
   if (!mossy) {
-    m.colorNode = base;
-    m.roughnessNode = float(0.88);
+    m.colorNode = stone;
     return m;
   }
   const g0 = texture(t.ground0, wp.xz.add(HALF + 0.5).div(SIZE));
   const wet = g0.x.add(g0.y);
-  const top = smoothstep(0.35, 0.85, normalLocal.y.add(a.y.sub(0.5).mul(0.6)));
-  m.colorNode = mix(base, vec3(0.045, 0.075, 0.025).mul(a.x.add(0.5)), top.mul(wet.mul(0.9).add(0.15)));
-  m.roughnessNode = float(0.9);
+  m.colorNode = mix(stone, vec3(0.04, 0.07, 0.022).mul(g.add(0.5)), up.mul(wet.mul(0.85).add(0.1)));
   return m;
 }
 
@@ -197,7 +265,7 @@ type Spec = {
   shadow: boolean;
 };
 
-export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number) {
+export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number, models: Models) {
   const group = new THREE.Group();
   const q = quality;
   const bark =
@@ -205,41 +273,41 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number
     (s) =>
       barkMat(s, t, tint, wind, moss);
   const leaf =
-    (a: number, b: number, wind: number): Part =>
+    (a: number, b: number, wind: number, gold = 0): Part =>
     (s) =>
-      leafMat(s, t, mood, a, b, wind);
+      leafMat(s, t, mood, a, b, wind, gold);
   const stone =
-    (tint: number, mossy: boolean): Part =>
+    (tint: number, mossy: boolean, near = true): Part =>
     (s) =>
-      stoneMat(s, t, tint, mossy);
+      stoneMat(s, t, tint, mossy, near && q > 0);
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
   const specs: Spec[] = [
     {
       kind: "oak",
-      reach: 1300,
-      lodAt: q > 1 ? 120 : 80,
+      reach: [700, 900, 1100, 1300][q],
+      lodAt: [35, 45, 70, 110][q],
       radius: 14,
       shadow: true,
+      // grown in Blender (tools/blender/trees.py)
       variants: range(4).map((i) => {
-        const nr = S.oak(100 + i, false),
-          fr = S.oak(100 + i, true);
+        const g = (part: string, lod: number) => model(models, `oak${i}_${part}_lod${lod}`);
         return {
           near: [
-            [nr.bark, bark(0x5a4a3c, 0.25, 1)],
-            [nr.leaves, leaf(0x4f7a2a, 0x8a8a2a, 0.3)],
+            [g("bark", 0), bark(0x5a4a3c, 0.25, 1)],
+            [g("leaves", 0), leaf(0x4f7a2a, 0x8a8a2a, 0.3, 1)],
           ],
           far: [
-            [fr.bark, bark(0x5a4a3c, 0.25, 1)],
-            [fr.leaves, leaf(0x4f7a2a, 0x8a8a2a, 0.3)],
+            [g("bark", 1), bark(0x5a4a3c, 0.25, 1)],
+            [g("leaves", 1), leaf(0x4f7a2a, 0x8a8a2a, 0.3, 1)],
           ],
         };
       }),
     },
     {
       kind: "pine",
-      reach: 1300,
-      lodAt: q > 1 ? 120 : 80,
+      reach: [700, 900, 1100, 1300][q],
+      lodAt: [50, 60, 100, 130][q],
       radius: 10,
       shadow: true,
       variants: range(3).map((i) => {
@@ -263,14 +331,10 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number
       lodAt: 90,
       radius: 9,
       shadow: true,
-      variants: range(3).map((i) => {
-        const nr = S.dead(300 + i, false),
-          fr = S.dead(300 + i, true);
-        return {
-          near: [[nr.bark, bark(0x4c4640, 0.12, 0.35)]],
-          far: [[fr.bark, bark(0x4c4640, 0.12, 0.35)]],
-        };
-      }),
+      variants: range(3).map((i) => ({
+        near: [[model(models, `dead${i}_bark_lod0`), bark(0x4c4640, 0.12, 0.35)]],
+        far: [[model(models, `dead${i}_bark_lod1`), bark(0x4c4640, 0.12, 0.35)]],
+      })),
     },
     {
       kind: "fern",
@@ -290,13 +354,24 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number
     },
     {
       kind: "rock",
-      reach: 600,
-      lodAt: 90,
+      reach: [200, 300, 450, 600][q],
+      lodAt: [40, 50, 70, 90][q],
       radius: 3,
       shadow: true,
       variants: range(4).map((i) => ({
-        near: [[S.rock(600 + i, 3), stone(0x6e6a64, true)]],
-        far: [[S.rock(600 + i, 1), stone(0x6e6a64, true)]],
+        near: [[model(models, `boulder${i}_lod0`), stone(0x6e6a64, true)]],
+        far: [[model(models, `boulder${i}_lod1`), stone(0x6e6a64, true, false)]],
+      })),
+    },
+    {
+      kind: "crag",
+      reach: [450, 650, 900, 1200][q],
+      lodAt: [60, 80, 120, 150][q],
+      radius: 9,
+      shadow: true,
+      variants: range(4).map((i) => ({
+        near: [[model(models, `crag${i}_lod0`), stone(0x72695e, true)]],
+        far: [[model(models, `crag${i}_lod1`), stone(0x72695e, true, false)]],
       })),
     },
     {

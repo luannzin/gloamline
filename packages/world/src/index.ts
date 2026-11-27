@@ -3,11 +3,26 @@
 // workers and calls finishWorld() on the pieces; buildWorld() does it all in one thread.
 
 import { CAVE_DIM, caveField, joinField, surfaceNets } from "./cave";
+import { erode } from "./erosion";
+import { smooth } from "./noise";
 import { buildRuins } from "./ruins";
 import { scatter } from "./scatter";
-import { type Ground, groundRows, heightAt, joinGround, Land, RoadIndex, SIZE, sampleRoads } from "./terrain";
+import {
+  type Ground,
+  groundNormals,
+  groundRows,
+  HOLLOW,
+  heightAt,
+  joinGround,
+  KEEP,
+  Land,
+  RoadIndex,
+  SIZE,
+  sampleRoads,
+} from "./terrain";
 
 export * from "./cave";
+export * from "./erosion";
 export * from "./noise";
 export * from "./ruins";
 export * from "./scatter";
@@ -50,15 +65,27 @@ export function finishWorld(
   const index = new RoadIndex(roads);
   const ground = joinGround(groundParts);
   const field = joinField(fieldParts);
+  log("Rain on the hills…");
+  // roads, the keep's plateau and the Hollow's floor keep their shape; the rest takes the rain
+  const rd = new Float32Array(2);
+  const wear = erode(ground, seed, (x, z) => {
+    index.near(x, z, rd);
+    return (
+      smooth(5, 16, rd[0]) *
+      smooth(KEEP.plateau - 22, KEEP.plateau - 6, Math.hypot(x - KEEP.x, z - KEEP.z)) *
+      smooth(HOLLOW.radius - 10, HOLLOW.radius + 30, Math.hypot(x - HOLLOW.x, z - HOLLOW.z))
+    );
+  });
+  groundNormals(ground);
   log("Hollowing the mountain…");
   const cave = surfaceNets(field);
   log("Raising the keep…");
-  const ruins = buildRuins(ground.height, land.noise, seed);
+  const { blocks: ruins, towers } = buildRuins(ground.height, land.noise, seed);
   log("Growing the woods…");
   const props = scatter(ground, index, field, land.noise, seed);
   const s = roads[0].pts;
   const spawn = [s[6], heightAt(ground.height, s[6], s[7]), s[7]];
-  return { seed, ground, roads: roads.map((r) => r.pts), field, cave, ruins, props, spawn };
+  return { seed, ground, wear, roads: roads.map((r) => r.pts), field, cave, ruins, towers, props, spawn };
 }
 
 export function buildWorld(seed = SEED, log: (stage: string, ms: number) => void = () => {}) {

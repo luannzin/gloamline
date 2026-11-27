@@ -9,13 +9,27 @@ export class Builder {
   n: number[] = [];
   uv: number[] = [];
   sway: number[] = [];
+  /** how much sky a point sees from inside its crown, 0..1 (1 for everything that isn't a leaf) */
+  ao: number[] = [];
   idx: number[] = [];
 
-  vert(x: number, y: number, z: number, nx: number, ny: number, nz: number, u: number, v: number, s: number) {
+  vert(
+    x: number,
+    y: number,
+    z: number,
+    nx: number,
+    ny: number,
+    nz: number,
+    u: number,
+    v: number,
+    s: number,
+    ao = 1,
+  ) {
     this.p.push(x, y, z);
     this.n.push(nx, ny, nz);
     this.uv.push(u, v);
     this.sway.push(s);
+    this.ao.push(ao);
     return this.p.length / 3 - 1;
   }
 
@@ -78,6 +92,7 @@ export class Builder {
     n: number[],
     sway: number,
     hang = false,
+    ao = 1,
   ) {
     const f = face.clone().normalize();
     const side = new THREE.Vector3(0, 1, 0).cross(f);
@@ -113,6 +128,7 @@ export class Builder {
         u0 + (sx + 1) * 0.25,
         v0 + (sy + 1) * 0.25,
         sway,
+        ao,
       );
     }
     this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -124,6 +140,7 @@ export class Builder {
     g.setAttribute("normal", new THREE.Float32BufferAttribute(this.n, 3));
     g.setAttribute("uv", new THREE.Float32BufferAttribute(this.uv, 2));
     g.setAttribute("sway", new THREE.Float32BufferAttribute(this.sway, 1));
+    g.setAttribute("ao", new THREE.Float32BufferAttribute(this.ao, 1));
     g.setIndex(this.idx);
     return g;
   }
@@ -159,78 +176,6 @@ function limb(
   return out;
 }
 
-/** The gloam oak: flared roots, a leaning trunk that splits into limbs, crowns of leaf cards, moss. */
-export function oak(seed: number, far: boolean) {
-  const r = rng(seed),
-    B = new Builder(),
-    L = new Builder();
-  const H = 9 + r() * 3;
-  const lean = v3((r() - 0.5) * 0.35, 1, (r() - 0.5) * 0.35);
-  const trunk = limb(r, [0, -0.6, 0], lean, H, 0.95, 0.5, far ? 5 : 9, 0, 0.15, 0.12);
-  B.tube(trunk, far ? 6 : 12, 0.9, seed);
-  const top = trunk[trunk.length - 1];
-  const crowns: number[][] = [];
-  const nl = 3 + Math.floor(r() * 2);
-  for (let i = 0; i < nl; i++) {
-    const a = (i / nl) * Math.PI * 2 + r() * 0.8;
-    const d = v3(Math.cos(a), 0.55 + r() * 0.5, Math.sin(a));
-    const l = limb(r, top, d, 6 + r() * 4, 0.45, 0.12, far ? 3 : 6, 0.15, 0.7, 0.35);
-    B.tube(l, far ? 5 : 8);
-    const end = l[l.length - 1];
-    crowns.push(end);
-    for (let j = 0; j < 2; j++) {
-      const m = l[Math.min(l.length - 2, 1 + j * 2)];
-      const s = limb(
-        r,
-        m,
-        v3(d.x + (r() - 0.5), 0.6, d.z + (r() - 0.5)),
-        3 + r() * 3,
-        0.16,
-        0.05,
-        far ? 2 : 4,
-        0.4,
-        0.9,
-        0.4,
-      );
-      if (!far) B.tube(s, 5);
-      crowns.push(s[s.length - 1]);
-    }
-  }
-  // the crown's centre: leaf normals point away from it
-  const cc = crowns.reduce(
-    (a, c) => [a[0] + c[0] / crowns.length, a[1] + c[1] / crowns.length, a[2] + c[2] / crowns.length],
-    [0, 0, 0],
-  );
-  cc[1] -= 1.5;
-  for (const c of crowns) {
-    const k = far ? 5 : 13;
-    for (let i = 0; i < k; i++) {
-      const o = v3(r() - 0.5, (r() - 0.35) * 0.8, r() - 0.5)
-        .normalize()
-        .multiplyScalar(1.2 + r() * 2.2);
-      const p = [c[0] + o.x, c[1] + o.y, c[2] + o.z];
-      const nn = v3(p[0] - cc[0], (p[1] - cc[1]) * 1.4, p[2] - cc[2]).normalize();
-      const sz = (far ? 4.2 : 2.6) + r() * 1.2;
-      L.card(p, v3(r() - 0.5, r() - 0.5, r() - 0.5), sz, sz, r() * 6.28, [0, 0], [nn.x, nn.y, nn.z], 1);
-    }
-    if (!far && r() < 0.7) {
-      const nn = v3(c[0] - cc[0], 0, c[2] - cc[2]).normalize();
-      L.card(
-        [c[0] + (r() - 0.5), c[1] - 0.5, c[2] + (r() - 0.5)],
-        nn,
-        1.4,
-        3.5 + r() * 2.5,
-        0,
-        [1, 1],
-        [nn.x, 0.2, nn.z],
-        0.9,
-        true,
-      );
-    }
-  }
-  return { bark: B.geometry(), leaves: L.geometry() };
-}
-
 /** A tall pine: one trunk and whorls of needle sprays that shrink toward the top. */
 export function pine(seed: number, far: boolean) {
   const r = rng(seed),
@@ -251,53 +196,22 @@ export function pine(seed: number, far: boolean) {
       const nn = v3(dx, 0.5, dz).normalize();
       // the card lies along the branch, tipped down at the end
       const face = v3(-dz, 0.9, dx).normalize();
-      L.card(p, face, reach * 1.15, reach * 0.75, 0, [1, 0], [nn.x, nn.y, nn.z], 0.3 + t * 0.7);
+      // the lower whorls sit in the shade of the ones above
+      L.card(
+        p,
+        face,
+        reach * 1.15,
+        reach * 0.75,
+        0,
+        [1, 0],
+        [nn.x, nn.y, nn.z],
+        0.3 + t * 0.7,
+        false,
+        0.5 + 0.5 * t,
+      );
     }
   }
   return { bark: B.geometry(), leaves: L.geometry() };
-}
-
-/** A dead tree: a twisted trunk and bare branches, three levels deep. */
-export function dead(seed: number, far: boolean) {
-  const r = rng(seed),
-    B = new Builder();
-  const H = 6 + r() * 5;
-  const trunk = limb(
-    r,
-    [0, -0.5, 0],
-    v3((r() - 0.5) * 0.5, 1, (r() - 0.5) * 0.5),
-    H,
-    0.5,
-    0.18,
-    far ? 4 : 7,
-    0,
-    0.3,
-    0.3,
-  );
-  B.tube(trunk, far ? 5 : 8, 0.7, seed);
-  const grow = (from: number[], dir: THREE.Vector3, len: number, rad: number, depth: number, s: number) => {
-    const l = limb(r, from, dir, len, rad, rad * 0.35, far ? 2 : 4, s, Math.min(1, s + 0.35), 0.5);
-    if (far && depth > 1) return;
-    B.tube(l, depth > 1 ? 4 : 6);
-    if (depth >= 3) return;
-    for (let i = 0; i < 2 + Math.floor(r() * 2); i++) {
-      const p = l[1 + Math.floor(r() * (l.length - 2))];
-      grow(
-        p,
-        v3(dir.x + (r() - 0.5) * 1.4, dir.y * 0.6 + r() * 0.5, dir.z + (r() - 0.5) * 1.4),
-        len * 0.6,
-        rad * 0.45,
-        depth + 1,
-        Math.min(1, s + 0.3),
-      );
-    }
-  };
-  for (let i = 0; i < 3; i++) {
-    const p = trunk[3 + Math.floor(r() * (trunk.length - 4))],
-      a = r() * 6.28;
-    grow(p, v3(Math.cos(a), 0.4 + r() * 0.6, Math.sin(a)), 3 + r() * 3, 0.2, 1, 0.3);
-  }
-  return { bark: B.geometry() };
 }
 
 export function fern(seed: number) {
@@ -374,28 +288,6 @@ export function reeds(seed: number) {
     }
   }
   return L.geometry();
-}
-
-/** A boulder: a displaced icosphere, sunk at the base. */
-export function rock(seed: number, detail = 3) {
-  const g = new THREE.IcosahedronGeometry(1, detail);
-  const n = new Noise(seed),
-    p = g.attributes.position as THREE.BufferAttribute;
-  const sx = 1 + n.n2(1, 2) * 0.35,
-    sz = 1 + n.n2(3, 4) * 0.35,
-    sy = 0.65 + n.n2(5, 6) * 0.2;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i),
-      y = p.getY(i),
-      z = p.getZ(i);
-    const d = 1 + 0.28 * n.fbm3(x * 1.3, y * 1.3, z * 1.3, 4) + 0.12 * Math.abs(n.n3(x * 4, y * 4, z * 4));
-    let yy = y * d * sy;
-    if (yy < -0.2) yy = -0.2 + (yy + 0.2) * 0.3;
-    p.setXYZ(i, x * d * sx, yy, z * d * sz);
-  }
-  g.computeVertexNormals();
-  g.setAttribute("sway", new THREE.Float32BufferAttribute(new Float32Array(p.count), 1));
-  return g;
 }
 
 /** A cluster of mushrooms: pale stems, wide caps; the caps glow. uv.x marks the cap (1). */

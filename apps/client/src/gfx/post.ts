@@ -13,6 +13,7 @@ import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import { godrays } from "three/addons/tsl/display/GodraysNode.js";
 import { ao } from "three/addons/tsl/display/GTAONode.js";
 import { sharpen } from "three/addons/tsl/display/SharpenNode.js";
+import { sss } from "three/addons/tsl/display/SSSNode.js";
 import { taau } from "three/addons/tsl/display/TAAUNode.js";
 import {
   dot,
@@ -26,6 +27,7 @@ import {
   normalView,
   output,
   pass,
+  perspectiveDepthToViewZ,
   pow,
   screenCoordinate,
   screenUV,
@@ -71,6 +73,8 @@ export function makePost(
   // where the sun is on screen (x, y in uv; z: 1 in front of the camera, 0 behind)
   const sunUV = uniform(new THREE.Vector3());
   const aspect = uniform(1);
+  const camNear = uniform(camera.near),
+    camFar = uniform(camera.far);
 
   let aoTex: THREE.TextureNode | null = null;
   if (q > 0) {
@@ -90,18 +94,36 @@ export function makePost(
     g.distanceAttenuation.value = 1.5;
     rays = bilateralBlur(g.getTextureNode()).getTextureNode();
   }
+  // contact shadows (High and up): the short shadows the shadow map's texels are too coarse for,
+  // under stones, at the foot of walls, between blades
+  let contact: THREE.TextureNode | null = null;
+  if (q > 1) {
+    const s = sss(depth, camera, mood.sun);
+    s.maxDistance.value = 0.6;
+    s.thickness.value = 0.06;
+    s.quality.value = q > 2 ? 0.6 : 0.4;
+    s.resolutionScale = 0.5;
+    s.useTemporalFiltering = true;
+    contact = s.getTextureNode();
+  }
   const bl = bloom(col, 1, 0.65, 0.25);
 
   const graded = Fn(() => {
     const c = col.rgb.toVar();
     if (aoTex) c.mulAssign(mix(float(1), aoTex.sample(screenUV).r, 0.8));
+    if (contact) {
+      // near only: far off, the march is noise at the scale of a pixel
+      const z = perspectiveDepthToViewZ(depth.sample(screenUV).r, camNear, camFar).negate();
+      c.mulAssign(mix(float(1), contact.sample(screenUV).r, smoothstep(45, 20, z).mul(0.5)));
+    }
     if (rays) {
       // forward scattering: the shafts are strongest looking toward the sun
       const d = screenUV.sub(sunUV.xy).mul(vec2(aspect, 1)).length();
       const phase = exp(d.mul(-2.6)).mul(2.4).mul(sunUV.z).add(0.3);
       const tint = mix(u.sunColor, u.fogColor.mul(2), 0.25);
       // the sky already carries its own scattering: shafts are air between here and the ground
-      const ground = smoothstep(1, 0.9995, depth.sample(screenUV).r).mul(0.8).add(0.2);
+      // (none on the sky itself: there the march ends at the shadow box and draws its edge)
+      const ground = smoothstep(1, 0.9995, depth.sample(screenUV).r);
       c.addAssign(
         tint.mul(rays.sample(screenUV).r).mul(phase).mul(ground).mul(u.rays).mul(u.sunPower).mul(0.16),
       );

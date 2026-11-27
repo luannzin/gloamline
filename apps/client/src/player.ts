@@ -27,6 +27,7 @@ function index(w: World): Obstacles {
   add("pine", 0.35, () => Infinity);
   add("dead", 0.4, () => Infinity);
   add("rock", 1.05, (y, s) => y + 0.7 * s);
+  add("crag", 1.7, (y, s) => y + 0.75 * s);
   add("stone", 0.55, () => Infinity);
   const circles = new Float32Array(list);
   const cells = new Map<number, { c: number[]; b: number[] }>();

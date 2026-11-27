@@ -97,7 +97,7 @@ const MOODS: Mood[] = [
     saturation: 1.05,
     contrast: 1.08,
     lift: 0.0,
-    rays: 1.0,
+    rays: 1.8,
     bloom: 0.22,
     fireflies: 0.35,
     embers: 0,
@@ -453,10 +453,11 @@ export function makeMood(land: Land, world: World, detail: THREE.Texture, qualit
     const amount = layer(u.fogDensity, u.fogBase, u.fogFalloff)
       .mul(p1.mul(0.5).add(0.75))
       .add(layer(u.mist, u.mistBase, u.mistFalloff).mul(patch.mul(1.6).add(0.15)));
-    const k = float(1).sub(exp(amount.add(d.mul(0.0003)).negate()));
+    // (plus a thin uniform haze, so a ridge a kilometre off is softened, not erased)
+    const k = float(1).sub(exp(amount.add(d.mul(0.00012)).negate()));
     const mu = max(dot(rd, u.sunDir), 0);
     const near = mix(u.fogColor, u.sunColor.mul(u.scatter).mul(0.35).add(u.fogColor), pow(mu, 7));
-    const col = mix(near, air(rd), smoothstep(70, 900, d).mul(u.open).mul(0.85));
+    const col = mix(near, air(rd), smoothstep(70, 900, d).mul(u.open).mul(0.7));
     return fog(col, k);
   })();
 

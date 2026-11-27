@@ -2,7 +2,7 @@
 
 A souls-like world at dusk for up to eight people, in the browser. Open the page, invite people with a link, and walk the same world together. No account, no install, no server to run.
 
-Everything you see is made by code when the page opens: the land, the forests, the ruined keep, the caves inside the mountain and the sky. There are no model or texture files.
+Everything you see is made by code: the land, its rain-cut gullies, the caves inside the mountain and the sky are built when the page opens; the trees, rocks, the Spire, the keep's roofs and banners and the other players' wanderer are grown by Blender scripts in `tools/blender`. There are no texture files.
 
 ## The world
 
@@ -11,12 +11,12 @@ Two kilometres square, five regions, each with its own light. Walking from one i
 | Region | What's there |
 |---|---|
 | **Gloamwood** | Where you wake: giant oaks with hanging moss, ferns, fireflies, gold light through the canopy |
-| **The Mire** | A moonlit marsh: still water that reflects the sky, reeds, dead trees, low mist |
-| **Cinder Keep** | A ruined castle on a cliff under a storm at dusk: broken walls and towers, an arcade, a gallows, embers in the wind |
+| **The Mire** | A moonlit marsh: still water with duckweed and rings where things touch it, reeds, dead trees, low mist |
+| **Cinder Keep** | A ruined castle on a cliff under a storm at dusk: masonry walls, slate-roofed towers flying banners, an arcade, a gallows, embers in the wind |
 | **The Hollow** | A mountain with caves inside: tunnels, a great chamber lit by shafts through the rock, glowing mushrooms |
-| **Pale Highlands** | Wind in tall grass, standing stones, and the Pale Spire on the horizon with its beam |
+| **Pale Highlands** | Wind in meadows of straw, green and heather, standing stones, and the Pale Spire on the horizon with its beam |
 
-Roads link them all from a crossroads in the middle. The ramps up the keep's cliff are cut by the road itself.
+Roads link them all from a crossroads in the middle. The ramps up the keep's cliff are cut by the road itself. Older ruins (a corner of wall, a tower's stump, a few arches) stand in clearings in every region, and the mountains that wall the world are scored with gullies.
 
 ## Play
 
@@ -34,7 +34,7 @@ Then open `http://localhost:5190`. It needs a browser with WebGPU (Chrome or Edg
 | Jump | `Space` |
 | Lantern | `F` |
 | Map (everyone's position) | `Tab` |
-| Viewpoints | `1` to `6` |
+| Viewpoints | `1` to `9` |
 | Frame rate | `H` |
 | Menu | `Esc` |
 
@@ -59,6 +59,8 @@ Each level is the same world, drawn with less. The menu picks one; a first visit
 - **Light and air**: a sun or moon per region with a cached shadow map, and past it long shadows marched along the sun over the heightmap; a sky with a thin bright horizon, a Mie glow round the sun and clouds lit from a second fetch toward it, which is also the image-based light; two layers of height fog (the region's air, and mist lying in the hollows in drifting patches) that turn into the sky behind at distance; shafts marched through the shadow map, ground-truth ambient occlusion, bloom, a filmic grade, and a dither against banding.
 - **Ground**: one detail noise fetched at four scales, the middle two twice (turned and shifted) so nothing tiles; leaf litter, moss, peat, ash, meadow patches of green, straw and heather shared with the grass blades over them; two sizes of loose stone from a cell texture, each stone rounded in the normal and settled in its own shadow; rock with strata on the faces, lichen on top and snow above the line.
 - **Temporal upscaling**: from Medium up the scene renders below the output with a jittered camera and a TAAU resolve rebuilds the full image from the last frames, then a contrast-adaptive sharpen. The render scale is what moves to hold the display's own refresh rate.
+- **Rain**: two hundred thousand seeded droplets run over a 4 m copy of the heightmap, carving gullies and leaving silt; where they ran shades stream beds, silt fans and bared rock.
+- **Models from Blender** (`tools/blender`, run headless, outputs in `apps/client/public/models`): oaks and dead trees grown by space colonization and skinned into one trunk, ~650 twig cards with crown shading; bedded crags and cracked boulders; slate roofs and banners; the Spire; the wanderer. Geometry only: the game shades them. To rebuild one: `blender -b --factory-startup -t 4 --python tools/blender/trees.py -- apps/client/public/models/trees.glb`.
 - **Multiplayer with no server of mine**: the link is `#<secret>`, and peers meet on public Nostr relays through [Trystero](https://github.com/dmotz/trystero), then talk over WebRTC. The secret never leaves the page.
 
 ## Thanks
