@@ -34,6 +34,7 @@ import {
 import * as THREE from "three/webgpu";
 import type { MoodState } from "./mood";
 import { fieldTint } from "./terrain";
+import type { GroundTex } from "./textures";
 
 const ROWS = 5;
 
@@ -77,7 +78,7 @@ function clump(BLADES: number) {
 }
 
 export function makeGrass(
-  tex: { height: THREE.DataTexture; ground0: THREE.Texture; ground1: THREE.Texture },
+  tex: GroundTex,
   detail: THREE.Texture,
   mood: MoodState,
   quality: number,
@@ -252,12 +253,19 @@ export function makeGrass(
   m.colorNode = albedo;
   // matte: a sky-blue sheen on every blade reads as plastic
   m.roughnessNode = float(0.82);
+  // the sky reaches the tips, barely the roots, and less of it under the trees
+  const canopy = varying(texture(tex.canopy, guv).level(float(0)).x);
+  m.aoNode = vv.mul(0.6).add(0.4).mul(float(1).sub(canopy.mul(0.6)));
   // light through the blades toward the sun
   const view = normalize(positionWorld.sub(cameraPosition));
   const back = pow(max(dot(view, mood.u.sunDir), 0), 3)
     .mul(0.85)
     .add(0.08);
-  m.emissiveNode = albedo.mul(mood.u.sunColor).mul(back.mul(mood.u.sunPower).mul(0.18)).mul(vv);
+  m.emissiveNode = albedo
+    .mul(mood.u.sunColor)
+    .mul(back.mul(mood.u.sunPower).mul(0.18))
+    .mul(vv)
+    .mul(float(1).sub(canopy.mul(0.5)));
 
   const mesh = new THREE.Mesh(clump(quality > 2 ? 9 : 7), m);
   mesh.count = side * side;

@@ -4,6 +4,7 @@
 // textures: region weights, roads, the normal, and the shared detail noise.
 import { HALF, SIZE, WATER_Y } from "@gloamline/world";
 import {
+  cameraPosition,
   Fn,
   float,
   fract,
@@ -149,10 +150,15 @@ export function makeTerrain(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
     m.colorNode = shade.color;
     m.normalNode = shade.normal;
     m.roughnessNode = shade.rough;
-    m.aoNode = shade.ao;
+    // under the trees the ground sees less sky; past the shadow map's box, the canopy stands in for
+    // the leaves' own shadows
+    const canopy = texture(tex.canopy, positionWorld.xz.add(HALF).div(SIZE)).x;
+    m.aoNode = shade.ao.mul(float(1).sub(canopy.mul(0.65)));
     m.metalnessNode = float(0);
+    const beyond = smoothstep(75, 105, positionWorld.sub(cameraPosition).length());
+    const dapple = float(1).sub(canopy.mul(beyond).mul(0.8));
     // long shadows past the shadow map's box: hills and ridges shading the land beyond them
-    if (quality > 1) m.receivedShadowNode = Fn(([s]: [THREE.Node<"float">]) => s.mul(far)) as never;
+    m.receivedShadowNode = Fn(([s]: [THREE.Node<"float">]) => s.mul(dapple).mul(quality > 1 ? far : 1)) as never;
     return m;
   }
 

@@ -43,6 +43,8 @@ const VIEWS: number[][] = [
   [-392, -332, -404, HOLLOW.floor + 30, -380, HOLLOW.floor + 0.2],
   [52, -456, 70, 120, -790],
   [-352, -148, -364, HOLLOW.floor + 6, -205],
+  // 7: into the low sun through Gloamwood (shafts, leaves lit from behind)
+  [-250, 190, -350, 40, 230],
 ];
 
 async function boot() {

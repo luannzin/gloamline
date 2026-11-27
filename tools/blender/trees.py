@@ -176,8 +176,8 @@ def oak(seed):
         near.append((p, 1.05 + rng.random() * 0.6, face, (0, 0), False))
     # moss hanging from the lower limbs
     lows = [i for i in range(len(nodes)) if 0.06 < r[i] < 0.2 and nodes[i].z < center.z]
-    for i in rng.sample(lows, min(len(lows), 14)):
-        near.append((nodes[i], 1.2 + rng.random() * 2.2, Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), 0)), (1, 1), True))
+    for i in rng.sample(lows, min(len(lows), 4)):
+        near.append((nodes[i], 0.9 + rng.random() * 1.2, Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), 0)), (1, 1), True))
     R = (radii.x + radii.y + radii.z) / 3
     leaves(f"oak{seed}_leaves_lod0", near, center, R)
     # far: one big card per 1.8 m cell of twigs

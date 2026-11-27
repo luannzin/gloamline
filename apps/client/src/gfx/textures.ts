@@ -26,11 +26,51 @@ export function groundTextures(w: World) {
     ground0: rgba(w.ground.ground0),
     ground1: rgba(w.ground.ground1),
     wear,
+    canopy: canopyTexture(w),
     stones: stoneTexture(),
   };
 }
 
 export type GroundTex = ReturnType<typeof groundTextures>;
+
+/**
+ * How much canopy is overhead, 512 x 512 (4 m a texel): each oak and pine's crown splatted as a
+ * soft disc and blurred once. The ground and grass under it see less sky, and past the shadow
+ * map's box less sun.
+ */
+function canopyTexture(w: World) {
+  const N = 512,
+    k = N / SIZE,
+    acc = new Float32Array(N * N);
+  const splat = (p: Float32Array, rad: number, amount: number) => {
+    for (let i = 0; i < p.length; i += 5) {
+      const cx = (p[i] + SIZE / 2) * k,
+        cz = (p[i + 2] + SIZE / 2) * k,
+        r = rad * p[i + 4] * k;
+      for (let z = Math.max(0, Math.floor(cz - r)); z <= Math.min(N - 1, Math.ceil(cz + r)); z++)
+        for (let x = Math.max(0, Math.floor(cx - r)); x <= Math.min(N - 1, Math.ceil(cx + r)); x++) {
+          const d = Math.hypot(x + 0.5 - cx, z + 0.5 - cz) / r;
+          if (d < 1) acc[z * N + x] += amount * (1 - d * d);
+        }
+    }
+  };
+  splat(w.props.oak, 6.5, 0.8);
+  splat(w.props.pine, 3.5, 0.6);
+  const out = new Uint8Array(N * N * 4);
+  for (let z = 0; z < N; z++)
+    for (let x = 0; x < N; x++) {
+      let s = 0;
+      for (let j = -1; j <= 1; j++)
+        for (let i = -1; i <= 1; i++)
+          s += acc[Math.min(N - 1, Math.max(0, z + j)) * N + Math.min(N - 1, Math.max(0, x + i))];
+      out[(z * N + x) * 4] = Math.min(255, (s / 9) * 255);
+    }
+  const t = new THREE.DataTexture(out, N, N, THREE.RGBAFormat, THREE.UnsignedByteType);
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  return t;
+}
 
 /**
  * 512 x 512, tiles in both directions. R: soft fbm, G: fine fbm, B: cells (pebbles, cracks),

@@ -97,7 +97,7 @@ const MOODS: Mood[] = [
     saturation: 1.05,
     contrast: 1.08,
     lift: 0.0,
-    rays: 1.0,
+    rays: 1.8,
     bloom: 0.22,
     fireflies: 0.35,
     embers: 0,
