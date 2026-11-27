@@ -164,7 +164,7 @@ def oak(seed):
     center = Vector((lean.x * 6, lean.y * 6, H + radii.z * 0.85))
     nodes, parents = grow(rng, H, lean, center, radii, 1400)
     r, kids = radii_of(nodes, parents)
-    bark(f"oak{seed}_bark_lod0", nodes, parents, r, 0.04, 1, 0.3, seed)
+    bark(f"oak{seed}_bark_lod0", nodes, parents, r, 0.045, 1, 0.18, seed)
     bark(f"oak{seed}_bark_lod1", nodes, parents, r, 0.07, 0, 0.35, seed)
     twigs = [i for i in range(len(nodes)) if r[i] < 0.05 and nodes[i].z > H * 0.8]
     near = []

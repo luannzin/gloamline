@@ -167,7 +167,8 @@ function bladeMat(s: Slot, mood: MoodState) {
  * a coarse and a fine fetch per face for colour, a relief from the coarse one's slope for the normal,
  * beds on the faces, lichen and (where it's damp) moss on what faces the sky.
  */
-function stoneMat(s: Slot, t: Tex, tint: number, mossy: boolean) {
+/** `near`: the full shader; far off, one projection's worth of fetches and no relief. */
+function stoneMat(s: Slot, t: Tex, tint: number, mossy: boolean, near: boolean) {
   const m = new THREE.MeshStandardNodeMaterial();
   const P = placed(s, 0, 0);
   m.positionNode = P.position;
@@ -187,7 +188,7 @@ function stoneMat(s: Slot, t: Tex, tint: number, mossy: boolean) {
     };
   };
   const big = tri(0.3, 0),
-    fine = tri(1.4, 0.17);
+    fine = near ? tri(1.4, 0.17) : big;
   const n = big.mix((v) => v.x),
     g = fine.mix((v) => v.y),
     cell = fine.mix((v) => v.z);
@@ -214,7 +215,7 @@ function stoneMat(s: Slot, t: Tex, tint: number, mossy: boolean) {
     gX.y.mul(tw.x).add(gZ.y.mul(tw.z)),
     gX.x.mul(tw.x).add(gY.y.mul(tw.y)),
   );
-  m.normalNode = transformNormalToView(normalize(nw.sub(bump.mul(0.6))));
+  m.normalNode = near ? transformNormalToView(normalize(nw.sub(bump.mul(0.6)))) : P.normal;
   const up = smoothstep(0.45, 0.85, nw.y.add(g.sub(0.5).mul(0.5)));
   const lichen = smoothstep(0.62, 0.8, cell.add(n.mul(0.3))).mul(up.add(0.25).min(1));
   const stone = mix(base, mix(vec3(0.16, 0.16, 0.1), vec3(0.2, 0.11, 0.05), P.seed), lichen.mul(0.4));
@@ -276,16 +277,16 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number
     (s) =>
       leafMat(s, t, mood, a, b, wind, gold);
   const stone =
-    (tint: number, mossy: boolean): Part =>
+    (tint: number, mossy: boolean, near = true): Part =>
     (s) =>
-      stoneMat(s, t, tint, mossy);
+      stoneMat(s, t, tint, mossy, near && q > 0);
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
   const specs: Spec[] = [
     {
       kind: "oak",
-      reach: 1300,
-      lodAt: [60, 70, 90, 120][q],
+      reach: [700, 900, 1100, 1300][q],
+      lodAt: [35, 45, 70, 110][q],
       radius: 14,
       shadow: true,
       // grown in Blender (tools/blender/trees.py)
@@ -305,8 +306,8 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number
     },
     {
       kind: "pine",
-      reach: 1300,
-      lodAt: q > 1 ? 120 : 80,
+      reach: [700, 900, 1100, 1300][q],
+      lodAt: [50, 60, 100, 130][q],
       radius: 10,
       shadow: true,
       variants: range(3).map((i) => {
@@ -353,24 +354,24 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number
     },
     {
       kind: "rock",
-      reach: 600,
-      lodAt: 90,
+      reach: [200, 300, 450, 600][q],
+      lodAt: [40, 50, 70, 90][q],
       radius: 3,
       shadow: true,
       variants: range(4).map((i) => ({
         near: [[model(models, `boulder${i}_lod0`), stone(0x6e6a64, true)]],
-        far: [[model(models, `boulder${i}_lod1`), stone(0x6e6a64, true)]],
+        far: [[model(models, `boulder${i}_lod1`), stone(0x6e6a64, true, false)]],
       })),
     },
     {
       kind: "crag",
-      reach: 1200,
-      lodAt: 140,
+      reach: [450, 650, 900, 1200][q],
+      lodAt: [60, 80, 120, 150][q],
       radius: 9,
       shadow: true,
       variants: range(4).map((i) => ({
         near: [[model(models, `crag${i}_lod0`), stone(0x72695e, true)]],
-        far: [[model(models, `crag${i}_lod1`), stone(0x72695e, true)]],
+        far: [[model(models, `crag${i}_lod1`), stone(0x72695e, true, false)]],
       })),
     },
     {

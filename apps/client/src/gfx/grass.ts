@@ -81,7 +81,7 @@ function clump(BLADES: number) {
 }
 
 export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState, quality: number) {
-  const side = [0, 150, 220, 290][quality],
+  const side = [0, 128, 220, 290][quality],
     step = [0, 0.34, 0.27, 0.25][quality];
   const reach = side * step * 0.5;
   const origin = uniform(new THREE.Vector2());
