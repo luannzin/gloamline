@@ -15,6 +15,7 @@ import { makePost, type Quality } from "./gfx/post";
 import { makeCave, makeRuins, makeSpire } from "./gfx/stone";
 import { makeTerrain } from "./gfx/terrain";
 import { detailTexture, foliageAtlas, groundTextures } from "./gfx/textures";
+import { makeTowers } from "./gfx/towers";
 import { makeWanderers } from "./gfx/wanderers";
 import { makeWater } from "./gfx/water";
 import { drawMap, toMap } from "./map";
@@ -45,6 +46,10 @@ const VIEWS: number[][] = [
   [-352, -148, -364, HOLLOW.floor + 6, -205],
   // 7: into the low sun through Gloamwood (shafts, leaves lit from behind)
   [-250, 190, -350, 40, 230],
+  // 8: the keep's courtyard, toward the inner keep
+  [405, -222, 362, 76, -266],
+  // 9: Cinder Keep on its cliff, from the road below
+  [205, -118, 380, 82, -250],
 ];
 
 async function boot() {
@@ -70,7 +75,10 @@ async function boot() {
     if (intervals.length < 120) requestAnimationFrame(probe);
   };
   requestAnimationFrame(probe);
-  const [world, models] = await Promise.all([buildWorld(say), loadModels(["rocks.glb", "trees.glb"])]);
+  const [world, models] = await Promise.all([
+    buildWorld(say),
+    loadModels(["rocks.glb", "trees.glb", "architecture.glb"]),
+  ]);
   const refresh = intervals.length > 20 ? intervals.sort((a, b) => a - b)[intervals.length >> 1] : 1000 / 60;
   say("Lighting the world…", 0.85);
 
@@ -113,6 +121,7 @@ async function boot() {
     makeRuins(world, detail),
     makeCave(world, detail),
     makeSpire(world, detail, mood),
+    makeTowers(world, models, detail),
     makeWater(tex.height, detail, mood, q),
     wanderers.group,
   );

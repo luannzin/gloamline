@@ -101,7 +101,8 @@ export function makePost(
       const phase = exp(d.mul(-2.6)).mul(2.4).mul(sunUV.z).add(0.3);
       const tint = mix(u.sunColor, u.fogColor.mul(2), 0.25);
       // the sky already carries its own scattering: shafts are air between here and the ground
-      const ground = smoothstep(1, 0.9995, depth.sample(screenUV).r).mul(0.8).add(0.2);
+      // (none on the sky itself: there the march ends at the shadow box and draws its edge)
+      const ground = smoothstep(1, 0.9995, depth.sample(screenUV).r);
       c.addAssign(
         tint.mul(rays.sample(screenUV).r).mul(phase).mul(ground).mul(u.rays).mul(u.sunPower).mul(0.16),
       );

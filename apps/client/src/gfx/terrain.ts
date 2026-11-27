@@ -158,7 +158,9 @@ export function makeTerrain(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
     const beyond = smoothstep(75, 105, positionWorld.sub(cameraPosition).length());
     const dapple = float(1).sub(canopy.mul(beyond).mul(0.8));
     // long shadows past the shadow map's box: hills and ridges shading the land beyond them
-    m.receivedShadowNode = Fn(([s]: [THREE.Node<"float">]) => s.mul(dapple).mul(quality > 1 ? far : 1)) as never;
+    // (inside the box the shadow map has it, and a 1 m heightmap would only add stair-steps)
+    const longShadow = quality > 1 ? mix(float(1), far, beyond) : float(1);
+    m.receivedShadowNode = Fn(([s]: [THREE.Node<"float">]) => s.mul(dapple).mul(longShadow)) as never;
     return m;
   }
 
@@ -255,7 +257,9 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
   const keep = mix(
     mix(vec3(0.07, 0.065, 0.06), vec3(0.13, 0.105, 0.065), smoothstep(0.5, 0.66, A.x.add(C.y.mul(0.2)))),
     vec3(0.03, 0.028, 0.027),
-    smoothstep(0.62, 0.75, B.w).mul(0.6),
+    smoothstep(0.62, 0.75, B.w)
+      .mul(0.6)
+      .mul(smoothstep(0.85, 0.95, macro.y)),
   ).mul(grain);
   // the highlands: the meadow's own patches of green, straw and heather, thin soil between
   const high = mix(field, vec3(0.1, 0.085, 0.06), smoothstep(0.55, 0.8, C.x.add(D.y.mul(0.3)).sub(0.15))).mul(
@@ -382,10 +386,12 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
     gX.y.negate().mul(tw.x),
   ).mul(rk);
   // each stone rounded up out of the soil
-  const dD = vec2(
+  // (the stone texture is laid turned: turn its slope back into world x and z)
+  const dS = vec2(
     texture(tex.stones, t1.add(vec2(e, 0))).x.sub(S1.x),
     texture(tex.stones, t1.add(vec2(0, e))).x.sub(S1.x),
   ).mul(k1.mul(14));
+  const dD = vec2(dS.x.mul(0.825).add(dS.y.mul(0.565)), dS.y.mul(0.825).sub(dS.x.mul(0.565)));
   const n = normalize(
     macro
       .add(vec3(bump.x.add(dD.x).negate(), 0, bump.y.add(dD.y).negate()).mul(tw.y.mul(0.7).add(0.3)))

@@ -77,12 +77,7 @@ function clump(BLADES: number) {
   return g;
 }
 
-export function makeGrass(
-  tex: GroundTex,
-  detail: THREE.Texture,
-  mood: MoodState,
-  quality: number,
-) {
+export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState, quality: number) {
   const side = [0, 140, 200, 270][quality],
     step = [0, 0.38, 0.3, 0.28][quality];
   const reach = side * step * 0.5;
@@ -255,7 +250,10 @@ export function makeGrass(
   m.roughnessNode = float(0.82);
   // the sky reaches the tips, barely the roots, and less of it under the trees
   const canopy = varying(texture(tex.canopy, guv).level(float(0)).x);
-  m.aoNode = vv.mul(0.6).add(0.4).mul(float(1).sub(canopy.mul(0.6)));
+  m.aoNode = vv
+    .mul(0.6)
+    .add(0.4)
+    .mul(float(1).sub(canopy.mul(0.6)));
   // light through the blades toward the sun
   const view = normalize(positionWorld.sub(cameraPosition));
   const back = pow(max(dot(view, mood.u.sunDir), 0), 3)

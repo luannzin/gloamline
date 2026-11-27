@@ -3,7 +3,7 @@
 
 import { caveAt, underRock } from "./cave";
 import { clamp, hash2, type Noise, smooth } from "./noise";
-import { graveyard } from "./ruins";
+import { graveyard, RUIN_SITES } from "./ruins";
 import { type Ground, HALF, HOLLOW, heightAt, KEEP, type RoadIndex, SIZE, WATER_Y } from "./terrain";
 
 export const KINDS = [
@@ -164,6 +164,9 @@ export function scatter(g: Ground, roads: RoadIndex, field: Float32Array, noise:
 
   function fill(x: number, z: number, kind: Kind) {
     if (Math.abs(x) > HALF - 8 || Math.abs(z) > HALF - 8) return false;
+    // the ruins out in the land stand in their own clearing (ferns, reeds and mushrooms may stay)
+    if (kind !== "fern" && kind !== "reed" && kind !== "shroom")
+      for (const [sx, sz, sr] of RUIN_SITES) if (Math.hypot(x - sx, z - sz) < sr + 6) return false;
     const i = clamp(Math.round(x + HALF), 0, SIZE - 1),
       j = clamp(Math.round(z + HALF), 0, SIZE - 1),
       o = (j * SIZE + i) * 4;

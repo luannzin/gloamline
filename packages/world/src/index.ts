@@ -80,12 +80,12 @@ export function finishWorld(
   log("Hollowing the mountain…");
   const cave = surfaceNets(field);
   log("Raising the keep…");
-  const ruins = buildRuins(ground.height, land.noise, seed);
+  const { blocks: ruins, towers } = buildRuins(ground.height, land.noise, seed);
   log("Growing the woods…");
   const props = scatter(ground, index, field, land.noise, seed);
   const s = roads[0].pts;
   const spawn = [s[6], heightAt(ground.height, s[6], s[7]), s[7]];
-  return { seed, ground, wear, roads: roads.map((r) => r.pts), field, cave, ruins, props, spawn };
+  return { seed, ground, wear, roads: roads.map((r) => r.pts), field, cave, ruins, towers, props, spawn };
 }
 
 export function buildWorld(seed = SEED, log: (stage: string, ms: number) => void = () => {}) {

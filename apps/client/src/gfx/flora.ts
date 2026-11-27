@@ -37,6 +37,7 @@ import {
   vec3,
 } from "three/tsl";
 import * as THREE from "three/webgpu";
+import { bump } from "./bump";
 import { type Models, model } from "./models";
 import type { MoodState } from "./mood";
 import * as S from "./shapes";
@@ -110,29 +111,13 @@ function barkMat(s: Slot, t: Tex, tint: number, wind: number, moss: number) {
   const d2 = side(vec2(3.1, 1.6));
   // furrows dark and deep, the plates between them lighter
   const furrow = smoothstep(0.15, 0.65, d.w);
-  const base = color(tint)
-    .mul(furrow.mul(0.8).add(0.3))
-    .mul(d2.x.mul(0.5).add(0.75));
+  const base = color(tint).mul(furrow.mul(0.8).add(0.3)).mul(d2.x.mul(0.5).add(0.75));
   const up = smoothstep(0.1, 0.8, normalLocal.y.add(d2.y.mul(0.5)));
   const low = smoothstep(4, 0.5, positionLocal.y);
   m.colorNode = mix(base, vec3(0.05, 0.085, 0.025).mul(d2.x.add(0.6)), max(up, low).mul(moss));
   m.normalNode = bump(P.normal as never, furrow.mul(0.035).add(d2.y.mul(0.008)));
   m.roughnessNode = float(0.92);
   return m;
-}
-
-/**
- * A view-space normal bent by the screen-space slope of `h` (metres), Mikkelsen's surface gradient
- * ("Bump Mapping Unparametrized Surfaces on the GPU", 2010): relief without a normal map or UVs.
- */
-function bump(n: Node3, h: Node3["x"]) {
-  const dpx = dFdx(positionView),
-    dpy = dFdy(positionView);
-  const r1 = cross(dpy, n),
-    r2 = cross(n, dpx);
-  const det = dot(dpx, r1);
-  const grad = r1.mul(dFdx(h)).add(r2.mul(dFdy(h))).mul(sign(det));
-  return normalize(n.mul(abs(det)).sub(grad));
 }
 
 function leafMat(s: Slot, t: Tex, mood: MoodState, colA: number, colB: number, wind: number, gold = 0) {

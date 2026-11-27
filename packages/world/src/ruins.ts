@@ -7,9 +7,23 @@ import { heightAt, KEEP, ROADS } from "./terrain";
 
 /** Floats per block: centre xyz, size xyz, yaw, roll, solid (1) or not (0). */
 export const BLOCK = 9;
+/** Floats per tower: centre x, foot y, centre z, radius, height, ruin (0 whole .. 1 a stump). */
+export const TOWER = 6;
+
+/** Older ruins out in the land, [x, z, radius]: two in the woods, one on the mire's edge, three in the highlands, one under the Hollow. */
+export const RUIN_SITES: [number, number, number][] = [
+  [-385, 115, 22],
+  [-140, 335, 18],
+  [235, 455, 18],
+  [-130, -560, 24],
+  [185, -525, 20],
+  [75, -300, 18],
+  [-255, -255, 18],
+];
 
 export function buildRuins(height: Float32Array, noise: Noise, seed: number) {
   const out: number[] = [];
+  const towers: number[] = [];
   const r = rng(seed ^ 0x6b6565);
   const g = (x: number, z: number) => heightAt(height, x, z);
   const block = (
@@ -64,6 +78,7 @@ export function buildRuins(height: Float32Array, noise: Noise, seed: number) {
   function tower(x: number, z: number, rad: number, h: number, ruin: number) {
     const n = Math.max(8, Math.round((Math.PI * 2 * rad) / 1.25));
     const y0 = g(x, z) - 2;
+    towers.push(x, y0, z, rad, h, ruin);
     const tilt = noise.n2(x / 7, z / 7);
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
@@ -196,6 +211,28 @@ export function buildRuins(height: Float32Array, noise: Noise, seed: number) {
     block(x + dx * 1.3, y + 7.3, z + dz * 1.3, 0.3, 0.3, 3, yaw + Math.PI / 2, 0, 0);
     block(x + dx * 0.6, y + 6.6, z + dz * 0.6, 0.18, 1.6, 0.18, yaw + Math.PI / 4, 0.8, 0);
   }
+  // the older ruins out in the land: a corner of wall, a tower's stump, two or three arches, rubble
+  for (const [cx, cz, rad] of RUIN_SITES) {
+    const a = r() * Math.PI * 2,
+      dx = Math.cos(a),
+      dz = Math.sin(a);
+    const L1 = rad * 0.9,
+      L2 = rad * 0.6;
+    const ax = cx - dx * L1 * 0.5,
+      az = cz - dz * L1 * 0.5,
+      bx = cx + dx * L1 * 0.5,
+      bz = cz + dz * L1 * 0.5;
+    wall(ax, az, bx, bz, 5 + r() * 3, 1.6, 0.55, [[0.35 + r() * 0.2, 0.62 + r() * 0.1]]);
+    wall(bx, bz, bx - dz * L2, bz + dx * L2, 4 + r() * 3, 1.6, 0.7);
+    tower(ax, az, 2.8, 8 + r() * 5, 0.75);
+    arcade(cx - dz * rad * 0.45, cz + dx * rad * 0.45, a, 2 + Math.floor(r() * 2), 5, 5.5);
+    for (let i = 0; i < 24; i++) {
+      const x = cx + (r() - 0.5) * rad * 1.3,
+        z = cz + (r() - 0.5) * rad * 1.3,
+        s = 0.4 + r() * 0.9;
+      block(x, g(x, z) + s * 0.25, z, s * 1.6, s * 0.8, s, r() * 6.28, (r() - 0.5) * 0.6, s > 1 ? 1 : 0);
+    }
+  }
   // rubble from the breaches and below the broken towers
   for (let i = 0; i < 260; i++) {
     const k = [4, 6, 2, 5][i % 4],
@@ -209,7 +246,7 @@ export function buildRuins(height: Float32Array, noise: Noise, seed: number) {
     const s = 0.5 + r() * 1.1;
     block(x, g(x, z) + s * 0.25, z, s * 1.6, s * 0.8, s, r() * 6.28, (r() - 0.5) * 0.6, s > 1 ? 1 : 0);
   }
-  return new Float32Array(out);
+  return { blocks: new Float32Array(out), towers: new Float32Array(towers) };
 }
 
 /** Where the graves go: inside the walls, beside the gate. */
