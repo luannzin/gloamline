@@ -4,6 +4,7 @@ import { BLOCK, heightAt, SPIRE, type World } from "@gloamline/world";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import {
   abs,
+  attribute,
   cos,
   dot,
   Fn,
@@ -29,6 +30,7 @@ import {
 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import { bump } from "./bump";
+import { type Models, model } from "./models";
 import type { MoodState } from "./mood";
 
 type V4 = ReturnType<typeof vec3> & { w: ReturnType<typeof float> };
@@ -150,40 +152,38 @@ export function makeCave(world: World, detail: THREE.Texture) {
   return mesh;
 }
 
-/** The Pale Spire: a broken tower taller than anything, and the beam it still throws. */
-export function makeSpire(world: World, detail: THREE.Texture, mood: MoodState) {
+/**
+ * The Pale Spire: a broken gothic tower taller than anything (tools/blender/spire.py), its windows
+ * still lit from inside, and the beam it throws from its open crown.
+ */
+export function makeSpire(world: World, detail: THREE.Texture, mood: MoodState, models: Models) {
   const group = new THREE.Group();
-  const pts: THREE.Vector2[] = [];
   const H = 330;
-  for (let i = 0; i <= 60; i++) {
-    const t = i / 60,
-      y = t * H;
-    let r = 16 * (1 - t) ** 0.8 + 4.5;
-    if (i % 6 === 0) r += 2.2; // rings
-    if (i % 6 === 1) r += 1.0;
-    pts.push(new THREE.Vector2(r, y));
-  }
-  const g = new THREE.LatheGeometry(pts, 40);
-  // break the top: drop vertices near the crown by an angle-dependent amount
-  const p = g.attributes.position as THREE.BufferAttribute;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i),
-      y = p.getY(i),
-      z = p.getZ(i);
-    if (y > H - 50) {
-      const a = Math.atan2(z, x);
-      const cut = H - 50 + 50 * (0.5 + 0.5 * Math.sin(a * 3 + 1)) * (0.6 + 0.4 * Math.sin(a * 7));
-      if (y > cut) p.setY(i, cut);
-    }
-  }
-  g.computeVertexNormals();
   const m = new THREE.MeshStandardNodeMaterial();
-  const d = tri(detail, 0.05, "x");
-  m.colorNode = mix(vec3(0.42, 0.42, 0.4), vec3(0.62, 0.6, 0.55), d).mul(
-    smoothstep(0.0, 40.0, positionLocal.y).mul(0.3).add(0.7),
-  );
-  m.roughnessNode = float(0.85);
-  const tower = new THREE.Mesh(g, m);
+  const glass = attribute("ao", "float");
+  const d = tri(detail, 0.05, "x"),
+    d2 = tri(detail, 0.6, "y");
+  // pale stone in 1.4 m courses, weathered darker toward the foot and in streaks down the faces
+  const f = fract(positionLocal.y.div(1.4));
+  const course = smoothstep(0.0, 0.06, min(f, float(1).sub(f)));
+  const streak = tri(detail, 0.02, "w");
+  const stone = mix(vec3(0.36, 0.36, 0.34), vec3(0.6, 0.58, 0.53), d)
+    .mul(d2.mul(0.3).add(0.8))
+    .mul(course.mul(0.25).add(0.75))
+    .mul(smoothstep(0.0, 60.0, positionLocal.y).mul(0.25).add(0.75))
+    .mul(float(1).sub(smoothstep(0.55, 0.85, streak).mul(0.3)));
+  m.colorNode = mix(stone, vec3(0.05, 0.04, 0.03), glass);
+  m.roughnessNode = mix(float(0.85), float(0.2), glass);
+  // the windows: a warm glow from inside, faint by day, plain at night
+  m.emissiveNode = vec3(1.0, 0.75, 0.42)
+    .mul(glass)
+    .mul(mix(float(0.6), float(3), mood.u.stars))
+    .mul(
+      sin(time.mul(0.4).add(positionLocal.y.mul(0.05)))
+        .mul(0.1)
+        .add(0.9),
+    );
+  const tower = new THREE.Mesh(model(models, "spire"), m);
   const base = heightAt(world.ground.height, SPIRE.x, SPIRE.z) - 8;
   tower.position.set(SPIRE.x, base, SPIRE.z);
   tower.castShadow = true;

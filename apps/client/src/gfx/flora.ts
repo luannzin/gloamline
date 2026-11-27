@@ -3,12 +3,10 @@
 // and far detail, and uploads that list. Wind bends each shape by its `sway`.
 import { HALF, type Kind, SIZE, type World } from "@gloamline/world";
 import {
-  abs,
   attribute,
   cameraPosition,
   color,
   cos,
-  cross,
   dFdx,
   dFdy,
   dot,
@@ -23,10 +21,8 @@ import {
   normalize,
   normalLocal,
   positionLocal,
-  positionView,
   positionWorld,
   pow,
-  sign,
   sin,
   smoothstep,
   texture,
@@ -120,7 +116,8 @@ function barkMat(s: Slot, t: Tex, tint: number, wind: number, moss: number) {
   return m;
 }
 
-function leafMat(s: Slot, t: Tex, mood: MoodState, colA: number, colB: number, wind: number, gold = 0) {
+function leafMat(s: Slot, t: Tex, mood: MoodState, colA: number, colB: number, wind: number, gold: number) {
+  // (an alpha test, not a hashed alpha: the hash's dither freezes into the cached shadow map)
   const m = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide, alphaTest: 0.42 });
   const P = placed(s, wind, 0.05);
   m.positionNode = P.position;

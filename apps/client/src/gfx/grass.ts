@@ -37,6 +37,9 @@ import { fieldTint } from "./terrain";
 import type { GroundTex } from "./textures";
 
 const ROWS = 5;
+/** the clump lattice's turn off the world axes */
+const TC = Math.cos(0.5),
+  TS = Math.sin(0.5);
 
 /** One clump: `BLADES` strips of ROWS rows. Attributes: blade index, row (0 root .. 1 tip), side (-1, 1). */
 function clump(BLADES: number) {
@@ -85,21 +88,26 @@ export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState
   const m = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide });
 
   // --- the clump: where it stands, how tall the ground lets it be
+  // the lattice is turned off the world's axes (and the jitter is a whole cell), so no row of
+  // clumps ever lines up with a road, a wall or the way the wind combs the field
   const id = float(instanceIndex);
   const gx = id.mod(side),
     gz = floor(id.div(side));
-  const wx = origin.x.add(gx.sub(side / 2).mul(step)),
-    wz = origin.y.add(gz.sub(side / 2).mul(step));
-  const cell = vec2(floor(wx.div(step).add(0.5)), floor(wz.div(step).add(0.5)));
-  const c1 = hash(cell.x.mul(12.9898).add(cell.y.mul(78.233))),
-    c2 = hash(cell.x.mul(39.34).add(cell.y.mul(11.13)).add(7));
-  // a whole cell of jitter, so clumps never line up in rows
-  const cx = wx.add(c1.sub(0.5).mul(step * 1.6)),
-    cz = wz.add(
+  const lx = origin.x.add(gx.sub(side / 2).mul(step)),
+    lz = origin.y.add(gz.sub(side / 2).mul(step));
+  const cell = vec2(floor(lx.div(step).add(0.5)), floor(lz.div(step).add(0.5)));
+  // (nested, not a hash of a weighted sum: that one is constant along lines through the lattice)
+  const hy = hash(cell.y.mul(1.618).add(0.31));
+  const c1 = hash(cell.x.add(hy.mul(4096))),
+    c2 = hash(cell.x.mul(1.37).add(hy.mul(8191)).add(7));
+  const jx = lx.add(c1.sub(0.5).mul(step * 1.7)),
+    jz = lz.add(
       hash(c1.mul(71.3).add(c2.mul(13.7)))
         .sub(0.5)
-        .mul(step * 1.6),
+        .mul(step * 1.7),
     );
+  const cx = jx.mul(TC).sub(jz.mul(TS)),
+    cz = jx.mul(TS).add(jz.mul(TC));
   const guv = vec2(cx, cz)
     .add(HALF + 0.5)
     .div(SIZE);
@@ -277,7 +285,10 @@ export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState
   return {
     mesh,
     update(p: THREE.Vector3) {
-      origin.value.set(Math.round(p.x / step) * step, Math.round(p.z / step) * step);
+      // snapped in the lattice's own (turned) frame, so a clump keeps its spot as the camera moves
+      const lx = p.x * TC + p.z * TS,
+        lz = -p.x * TS + p.z * TC;
+      origin.value.set(Math.round(lx / step) * step, Math.round(lz / step) * step);
     },
   };
 }

@@ -42,7 +42,7 @@ const VIEWS: number[][] = [
   [292, 292, 430, 2, 430],
   [272, -170, 370, 75, -245],
   [-392, -332, -404, HOLLOW.floor + 30, -380, HOLLOW.floor + 0.2],
-  [52, -456, 70, 120, -790],
+  [40, -446, 70, 120, -790],
   [-352, -148, -364, HOLLOW.floor + 6, -205],
   // 7: into the low sun through Gloamwood (shafts, leaves lit from behind)
   [-250, 190, -350, 40, 230],
@@ -77,7 +77,7 @@ async function boot() {
   requestAnimationFrame(probe);
   const [world, models] = await Promise.all([
     buildWorld(say),
-    loadModels(["rocks.glb", "trees.glb", "architecture.glb", "wanderer.glb"]),
+    loadModels(["rocks.glb", "trees.glb", "architecture.glb", "wanderer.glb", "spire.glb"]),
   ]);
   const refresh = intervals.length > 20 ? intervals.sort((a, b) => a - b)[intervals.length >> 1] : 1000 / 60;
   say("Lighting the world…", 0.85);
@@ -120,7 +120,7 @@ async function boot() {
     particles.group,
     makeRuins(world, detail),
     makeCave(world, detail),
-    makeSpire(world, detail, mood),
+    makeSpire(world, detail, mood, models),
     makeTowers(world, models, detail),
     makeWater(tex.height, detail, mood, q),
     wanderers.group,
