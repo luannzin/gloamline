@@ -11,6 +11,8 @@ Three.js r187 (WebGPU, TSL), React + coss ui for the interface, Trystero for the
 | How does it look and read? | `DESIGN.md` |
 | What's planned, and why this stack? | `docs/PLAN.md` |
 | How do players meet? | `apps/client/src/net.ts` |
+| What does the map (`Tab`) show? | `apps/client/src/map.ts` (drawn once from the world), `ui/app.tsx` (`WorldMap`) |
+| What does each detail level change? | `Quality` in `apps/client/src/gfx/post.ts`; the `q > n` checks where each system is made |
 
 ## Rules
 

@@ -72,12 +72,13 @@ export function makeWanderers(camera: THREE.Camera, tags: HTMLElement) {
       const lit = o[4] > 0.5;
       f.light.intensity += ((lit ? 9 : 0) - f.light.intensity) * 0.15;
       f.bulb.color.setHex(lit ? 0xffc27a : 0x40302a);
-      // the name, above the hood, while in front and near
+      // the name, above the hood, while in front and within 160 m (fading over the last 40)
       v.set(o[0], o[1] + 2.05, o[2]).project(camera);
       const d = Math.hypot(o[0] - camera.position.x, o[2] - camera.position.z);
-      const show = v.z < 1 && d < 70;
-      f.tag.textContent = r.name || "Wanderer";
-      f.tag.style.opacity = show ? String(Math.min(1, (70 - d) / 20)) : "0";
+      const show = v.z < 1 && d < 160;
+      const name = r.name || "Wanderer";
+      if (f.tag.textContent !== name) f.tag.textContent = name;
+      f.tag.style.opacity = show ? String(Math.min(1, (160 - d) / 40)) : "0";
       f.tag.style.transform = `translate(calc(${((v.x + 1) / 2) * innerWidth}px - 50%), ${((1 - v.y) / 2) * innerHeight}px)`;
     }
   }

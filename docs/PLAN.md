@@ -27,6 +27,12 @@
 ## Frame budget
 
 Target: the display's own rate (165 Hz on the dev machine: RX 7600, 1440p), held by dynamic
-resolution between 50% and 100%. What costs the most, in order: grass vertices, the shadow map
-(redrawn only when its box moves 3 m or the sun turns), flora in the shadow pass (near detail only),
-god rays (40 steps, half resolution), GTAO (half resolution).
+resolution: the render scale under the temporal upscaler (45 to 100% by level), or the canvas on Low.
+What costs the most, in order: grass vertices, the ground's shading (about 25 fetches, plus 15 steps
+of long shadow on High), the shadow map (redrawn only when its box moves 3 m or the sun turns), flora
+in the shadow pass (near detail only), god rays (half resolution), GTAO (half resolution). The sky is
+drawn last so its clouds are paid only where it shows; its image-based light is redrawn only when the
+blend of moods has moved.
+
+On a Ryzen 5700U's integrated GPU at 1280x720: Low holds 60; High at a 75% render scale runs 27 to
+50 fps by place (the thick of Gloamwood is the worst), so dynamic resolution settles near 50%.

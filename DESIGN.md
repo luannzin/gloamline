@@ -91,3 +91,7 @@ The rules, from `luannzin-online-presence/games/CRAFT.md` and abyssal-garden:
 | Middle, 40% down | Area name | On crossing into a region |
 | Bottom left | `Esc` menu hint | First 6 s of play |
 | Top right | Frame rate, render scale, position | `H` |
+| Middle, over a veil | The map: relief tinted by region, area names in the pixel face, you as a gold arrow, others as their critter and name | `Tab` opens and closes it |
+
+The map is the one other thing allowed over the middle of the frame, and only because it was asked for.
+Remote players carry their name over the hood (Inter 14px, `ink`), fading out between 120 and 160 m.

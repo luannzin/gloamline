@@ -15,7 +15,7 @@ export function groundTextures(w: World) {
     t.needsUpdate = true;
     return t;
   };
-  return { height, ground0: rgba(w.ground.ground0), ground1: rgba(w.ground.ground1) };
+  return { height, ground0: rgba(w.ground.ground0), ground1: rgba(w.ground.ground1), stones: stoneTexture() };
 }
 
 /**
@@ -77,6 +77,60 @@ export function detailTexture() {
         }
       out[o + 2] = Math.min(255, (d2 - d1) * 400);
       out[o + 3] = (1 - Math.abs(fbm(x, y * 0.25, 8, 4) * 2 - 1)) ** 2 * 255;
+    }
+  const t = new THREE.DataTexture(out, N, N, THREE.RGBAFormat, THREE.UnsignedByteType);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = 8;
+  t.needsUpdate = true;
+  return t;
+}
+
+/**
+ * Loose stones, 512 x 512, tiling: 20 x 20 jittered cells, each with its own random. R: the stone's
+ * rounded height (0 between stones), G: the cell's random (a material keeps stones whose G is under
+ * its density), B: a second random (tone), A: distance to the cell's edge. Linear data.
+ */
+export function stoneTexture() {
+  const N = 512,
+    C = 20,
+    out = new Uint8Array(N * N * 4);
+  const r = rng(29);
+  const cell = new Float32Array(C * C * 6).map(() => r());
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      const cx = (x / N) * C,
+        cy = (y / N) * C;
+      let d1 = 9,
+        d2 = 9,
+        k1 = 0;
+      for (let j = -1; j <= 1; j++)
+        for (let i = -1; i <= 1; i++) {
+          const gx = Math.floor(cx) + i,
+            gy = Math.floor(cy) + j;
+          const k = ((((gy % C) + C) % C) * C + (((gx % C) + C) % C)) * 6;
+          // stones are a little oval, turned their own way
+          const dx = gx + 0.2 + cell[k] * 0.6 - cx,
+            dy = gy + 0.2 + cell[k + 1] * 0.6 - cy;
+          const a = cell[k + 4] * Math.PI,
+            u = dx * Math.cos(a) + dy * Math.sin(a),
+            v = (-dx * Math.sin(a) + dy * Math.cos(a)) * 1.35;
+          const d = Math.hypot(u, v);
+          if (d < d1) {
+            d2 = d1;
+            d1 = d;
+            k1 = k;
+          } else if (d < d2) d2 = d;
+        }
+      const rad = 0.28 + cell[k1 + 2] * 0.3;
+      const h = d1 < rad ? Math.sqrt(1 - (d1 / rad) ** 2) : 0;
+      const o = (y * N + x) * 4;
+      out[o] = h * 255;
+      out[o + 1] = cell[k1 + 5] * 255;
+      out[o + 2] = cell[k1 + 3] * 255;
+      out[o + 3] = Math.min(255, (d2 - d1) * 300);
     }
   const t = new THREE.DataTexture(out, N, N, THREE.RGBAFormat, THREE.UnsignedByteType);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -155,13 +209,19 @@ export function foliageAtlas() {
     g.moveTo(20, y0);
     g.lineTo(20 + Math.cos(a0) * 470, y0 + Math.sin(a0) * 470);
     g.stroke();
-    for (let k = 0; k < 160; k++) {
+    // a dark core under the needles keeps the spray solid in the small mips, so far pines don't
+    // dissolve into dots
+    g.fillStyle = hsl(150, 30, 10, 0.85);
+    g.beginPath();
+    g.ellipse(20 + Math.cos(a0) * 235, y0 + Math.sin(a0) * 235, 220, 26, a0, 0, Math.PI * 2);
+    g.fill();
+    for (let k = 0; k < 280; k++) {
       const t = r(),
         x = 20 + Math.cos(a0) * 470 * t,
         y = y0 + Math.sin(a0) * 470 * t;
       const ang = a0 + (r() < 0.5 ? -1 : 1) * (0.5 + r() * 0.9);
       g.strokeStyle = hsl(140 + r() * 30, 30 + r() * 20, 14 + r() * 16);
-      g.lineWidth = 2;
+      g.lineWidth = 3;
       g.beginPath();
       g.moveTo(x, y);
       g.lineTo(

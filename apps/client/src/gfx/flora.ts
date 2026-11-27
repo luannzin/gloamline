@@ -7,11 +7,14 @@ import {
   cameraPosition,
   color,
   cos,
+  dFdx,
+  dFdy,
   dot,
   Fn,
   float,
   hash,
   instancedDynamicBufferAttribute,
+  log2,
   max,
   mix,
   normalize,
@@ -103,7 +106,11 @@ function leafMat(s: Slot, t: Tex, mood: MoodState, colA: number, colB: number, w
   const tint = mix(color(colA), color(colB), P.seed);
   const albedo = tx.rgb.mul(tint).mul(2.2);
   m.colorNode = albedo;
-  m.opacityNode = tx.a;
+  // the small mips average the gaps into the leaves and an alpha test eats them: lift alpha by the
+  // mip level (Golus), so a far crown stays as full as a near one
+  const tuv = uv().mul(1024);
+  const lod = max(log2(max(dot(dFdx(tuv), dFdx(tuv)), dot(dFdy(tuv), dFdy(tuv)))).mul(0.5), 0);
+  m.opacityNode = tx.a.mul(lod.mul(0.25).add(1));
   // light through the leaves when looking toward the sun
   const v = normalize(positionWorld.sub(cameraPosition));
   const back = pow(max(dot(v, mood.u.sunDir), 0), 3);

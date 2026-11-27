@@ -18,6 +18,7 @@ export function App() {
       {s.phase === "loading" && <Loading stage={s.stage} progress={s.progress} error={s.error} />}
       {s.phase === "menu" && <Menu />}
       {s.phase === "playing" && <Hud />}
+      {s.phase === "playing" && s.mapOpen && <WorldMap />}
       {s.stats && (
         <p className="pointer-events-none fixed top-3 right-4 whitespace-pre text-right font-mono text-ink-soft text-xs tabular-nums [text-shadow:0_1px_4px_#000]">
           {s.stats}
@@ -179,6 +180,10 @@ function Menu() {
           <dd>
             <Kbd>F</Kbd>
           </dd>
+          <dt>Map</dt>
+          <dd>
+            <Kbd>Tab</Kbd>
+          </dd>
           <dt>Menu</dt>
           <dd>
             <Kbd>Esc</Kbd>
@@ -198,6 +203,7 @@ function Menu() {
               <ToggleGroupItem value="0">Low</ToggleGroupItem>
               <ToggleGroupItem value="1">Medium</ToggleGroupItem>
               <ToggleGroupItem value="2">High</ToggleGroupItem>
+              <ToggleGroupItem value="3">Ultra</ToggleGroupItem>
             </ToggleGroup>
           </div>
           <p id="detail-note" className="m-0 text-ink-muted text-xs">
@@ -286,6 +292,68 @@ function Hud() {
         <Kbd>Esc</Kbd> menu
       </p>
     </div>
+  );
+}
+
+/**
+ * The map, on Tab: the world drawn from above, area names in the pixel face, you as a gold arrow
+ * along your heading, everyone else as their critter with their name.
+ */
+function WorldMap() {
+  const s = useUI();
+  const me = s.marks.find((m) => m.you);
+  return (
+    <section
+      aria-label="Map"
+      className="pointer-events-none fixed inset-0 grid place-items-center bg-night/60 backdrop-blur-sm transition-opacity duration-200 starting:opacity-0"
+    >
+      <div className="relative aspect-square w-[min(84vh,84vw)] overflow-hidden rounded-sm shadow-[0_8px_48px_rgba(0,0,0,0.6)] ring-1 ring-ink/10">
+        {s.mapImage && (
+          <img src={s.mapImage} alt="" className="absolute inset-0 size-full [image-rendering:auto]" />
+        )}
+        {s.mapLabels.map((l) => (
+          <span
+            key={l.name}
+            className="absolute -translate-x-1/2 -translate-y-1/2 text-[11px] text-ink/80 drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)] sm:text-[14px]"
+            style={{ left: `${l.u * 100}%`, top: `${l.v * 100}%` }}
+          >
+            <PixelName name={l.name} />
+          </span>
+        ))}
+        {s.marks
+          .filter((m) => !m.you)
+          .map((m) => (
+            <span
+              key={m.id}
+              className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 transition-[left,top] duration-100 ease-linear"
+              style={{ left: `${m.u * 100}%`, top: `${m.v * 100}%` }}
+            >
+              <Critter seed={m.seed} />
+              <span className="whitespace-nowrap text-ink text-xs [text-shadow:0_1px_4px_#000]">
+                {m.name || "Wanderer"}
+              </span>
+            </span>
+          ))}
+        {me && (
+          <svg
+            viewBox="-8 -8 16 16"
+            aria-hidden="true"
+            className="absolute size-5 -translate-x-1/2 -translate-y-1/2 drop-shadow-[0_0_6px_rgba(255,209,128,0.8)]"
+            style={{ left: `${me.u * 100}%`, top: `${me.v * 100}%`, rotate: `${me.heading}rad` }}
+          >
+            <path d="M0 -7 L5 6 L0 3 L-5 6 Z" fill="#ffd180" stroke="#1a1424" strokeWidth="1.2" />
+          </svg>
+        )}
+      </div>
+      <ul className="sr-only">
+        {s.marks.map((m) => (
+          <li key={m.id}>{m.you ? "You" : m.name || "Wanderer"}</li>
+        ))}
+      </ul>
+      <p className="absolute bottom-4 left-5 flex items-center gap-2 text-ink-soft text-sm [text-shadow:0_1px_6px_#000]">
+        <Kbd>Tab</Kbd> close map
+      </p>
+    </section>
   );
 }
 

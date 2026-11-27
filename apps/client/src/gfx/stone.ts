@@ -1,6 +1,7 @@
 // Worked and living stone: the keep's blocks (one instanced box), the Hollow's rock (the surface
 // nets mesh), and the Pale Spire on the northern horizon with its beam.
 import { BLOCK, heightAt, SPIRE, type World } from "@gloamline/world";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import {
   abs,
   cos,
@@ -89,7 +90,8 @@ export function makeRuins(world: World, detail: THREE.Texture) {
     return mix(mix(base, base.mul(0.35), soot.mul(0.7)), vec3(0.05, 0.07, 0.03), moss.mul(0.8)).mul(joints);
   })();
   m.roughnessNode = float(0.9);
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), m);
+  // worn edges catch the light; a sharp box reads as a toy
+  const mesh = new THREE.Mesh(new RoundedBoxGeometry(1, 1, 1, 2, 0.07), m);
   mesh.count = n;
   mesh.frustumCulled = false;
   mesh.castShadow = mesh.receiveShadow = true;
@@ -107,15 +109,17 @@ export function makeCave(world: World, detail: THREE.Texture) {
     d2 = tri(detail, 0.5, "y"),
     w = tri(detail, 0.04, "w");
   const strata = smoothstep(0.35, 0.65, fract(positionWorld.y.mul(0.18).add(d.mul(1.5))));
-  m.colorNode = mix(vec3(0.07, 0.072, 0.078), vec3(0.15, 0.14, 0.13), strata.mul(0.6).add(d2.mul(0.4)))
-    .mul(w.mul(0.5).add(0.75))
-    .add(
-      vec3(0.03, 0.05, 0.02)
-        .mul(smoothstep(0.7, 0.95, normalLocal.y))
-        .mul(d2),
-    );
-  // wet where the rock faces down or sideways inside
-  m.roughnessNode = mix(float(0.45), float(0.9), smoothstep(-0.2, 0.6, normalLocal.y.add(d2.sub(0.5))));
+  // grey stone in bands, darker in the cracks; moss and grass on the ledges that face the sky
+  const ledge = smoothstep(0.55, 0.85, normalLocal.y.add(d2.sub(0.5).mul(0.4)));
+  m.colorNode = mix(
+    mix(vec3(0.055, 0.056, 0.06), vec3(0.12, 0.112, 0.1), strata.mul(0.6).add(d2.mul(0.4))).mul(
+      w.mul(0.6).add(0.65),
+    ),
+    mix(vec3(0.035, 0.06, 0.02), vec3(0.09, 0.085, 0.04), d),
+    ledge.mul(0.85),
+  );
+  // wet only on the ceilings, where it drips; dry and matte everywhere else
+  m.roughnessNode = mix(float(0.5), float(0.93), smoothstep(-0.6, -0.1, normalLocal.y));
   const mesh = new THREE.Mesh(g, m);
   mesh.castShadow = mesh.receiveShadow = true;
   return mesh;
