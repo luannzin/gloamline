@@ -84,13 +84,15 @@ export function makeColumn(world: World, detail: THREE.Texture, mood: MoodState)
     .mul(0.06)
     .add(sin(time.mul(3.7).add(n.mul(6))).mul(0.05))
     .add(0.9);
+  // the fire in tongues where the billows part, and its light on the smoke's underside above it
+  const tongues = smoothstep(0.55, 1.2, n.add(exp(t.mul(-14)).mul(0.6)));
   const fire = vec3(1.0, 0.36, 0.09)
     .mul(
-      exp(t.mul(-7))
-        .mul(4.5)
-        .add(exp(t.mul(-2.6)).mul(0.3)),
+      exp(t.mul(-10))
+        .mul(4.0)
+        .mul(tongues)
+        .add(exp(t.mul(-3.2)).mul(0.22).mul(n)),
     )
-    .mul(n.mul(0.8).add(0.4))
     .mul(flick);
   m.colorNode = smoke.add(fire);
   m.opacityNode = dens.mul(0.92);

@@ -1,7 +1,7 @@
-// The other people in the lobby: hooded wanderers (tools/blender/wanderer.py) in a cloak dyed from
-// their critter's dusk colour, carrying a lantern that lights when theirs is on, with their name
-// above them. Their walk is drawn from how fast their pose moves: legs swing, the body bobs, the
-// cloak's hem trails.
+// The survivors in the lobby (tools/blender/survivor.py), and you over your own shoulder: a quilted
+// telogreika dyed their HUD colour, an ushanka, a rucksack and rifle, and a hurricane lantern that
+// lights when theirs is on, with their name above them. Their walk is drawn from how fast their pose
+// moves: legs swing, the free arm swings against them, the body bobs, flaps and straps trail.
 import {
   attribute,
   color,
@@ -31,64 +31,66 @@ type Figure = {
 
 export function makeWanderers(camera: THREE.Camera, tags: HTMLElement, models: Models) {
   const group = new THREE.Group();
-  const body = model(models, "wanderer").clone().rotateY(Math.PI);
+  const body = model(models, "survivor").clone().rotateY(Math.PI);
   const figures = new Map<string, Figure>();
   const o = new Float32Array(5),
     v = new THREE.Vector3();
 
   function material(cloth: THREE.Color) {
     const m = new THREE.MeshStandardNodeMaterial();
-    // COLOR_0 from the script: r sway, g material (cloth, leather, iron, glass), b legs
+    // COLOR_0 from the script: r sway, g material (in eighths: jacket, trousers, fur, canvas,
+    // leather, wool, iron, wood, glass), b what swings (0.25 left leg, 0.75 right leg, 0.4 left arm)
     const sway = attribute("sway", "float"),
       kind = attribute("ao", "float"),
-      leg = attribute("extra", "float");
+      limb = attribute("extra", "float");
     const s = uniform(0),
       ph = uniform(0),
       l = uniform(0);
     m.positionNode = Fn(() => {
       const p = positionLocal.toVar();
       const walk = s.min(1);
-      // legs: left (0.25) and right (0.75) swing opposite, about the hip
-      const side = leg.sub(0.5).sign();
-      const swing = sin(ph)
-        .mul(side)
-        .mul(walk)
-        .mul(0.35)
-        .mul(leg.greaterThan(0.1).select(float(1), float(0)));
-      p.z.addAssign(swing.mul(float(0.95).sub(p.y).max(0)));
-      // the body bobs twice a stride; the cloak's hem trails behind and ripples
+      const on = limb.greaterThan(0.1).select(float(1), float(0));
+      const arm = limb.sub(0.5).abs().lessThan(0.15).select(float(1), float(0));
+      // legs: left and right swing opposite, about the hip; the free arm swings against its leg,
+      // about the shoulder
+      const side = limb.sub(0.5).sign();
+      const swing = sin(ph).mul(side).mul(walk).mul(on);
+      p.z.addAssign(swing.mul(0.35).mul(float(0.95).sub(p.y).max(0)).mul(float(1).sub(arm)));
+      p.z.addAssign(swing.mul(-0.4).mul(float(1.43).sub(p.y).max(0)).mul(arm));
+      // the body bobs twice a stride; flaps, straps and the hem trail behind and stir
       p.y.addAssign(sin(ph.mul(2)).abs().mul(0.035).mul(walk));
-      p.z.addAssign(sway.mul(walk.mul(0.22).add(sin(time.mul(1.6).add(p.x.mul(3))).mul(0.03))));
-      p.x.addAssign(sway.mul(sin(time.mul(1.1).add(p.y.mul(2))).mul(0.03)));
+      p.z.addAssign(sway.mul(walk.mul(0.12).add(sin(time.mul(1.6).add(p.x.mul(3))).mul(0.02))));
+      p.x.addAssign(sway.mul(sin(time.mul(1.1).add(p.y.mul(2))).mul(0.02)));
       return p;
     })();
-    const leather = color(0x2a1e16),
-      iron = color(0x3c3b3a);
-    const cl = color(cloth);
-    m.colorNode = mix(
-      mix(mix(cl, leather, smoothstep(0.2, 0.4, kind)), iron, smoothstep(0.55, 0.75, kind)),
-      color(0x40302a),
-      smoothstep(0.85, 0.95, kind),
-    );
-    m.roughnessNode = mix(float(0.95), float(0.42), smoothstep(0.55, 0.75, kind));
-    m.metalnessNode = smoothstep(0.55, 0.75, kind)
-      .mul(float(1).sub(smoothstep(0.85, 0.95, kind)))
-      .mul(0.8);
-    m.emissiveNode = vec3(1.0, 0.62, 0.3)
-      .mul(smoothstep(0.85, 0.95, kind))
-      .mul(l.mul(6));
+    const is = (v: number) => smoothstep(0.06, 0.03, kind.sub(v).abs());
+    const glass = is(1);
+    const ironK = is(0.75);
+    m.colorNode = color(cloth)
+      .mul(is(0))
+      .add(color(0x33352f).mul(is(0.125)))
+      .add(color(0x4a4036).mul(is(0.25)))
+      .add(color(0x5a5438).mul(is(0.375)))
+      .add(color(0x2a1e16).mul(is(0.5)))
+      .add(color(0x2b2a2a).mul(is(0.625)))
+      .add(color(0x3c3b3a).mul(ironK))
+      .add(color(0x4a2e1a).mul(is(0.875)))
+      .add(color(0x40302a).mul(glass));
+    m.roughnessNode = mix(mix(float(0.95), float(0.42), ironK), float(0.1), glass);
+    m.metalnessNode = ironK.mul(0.8);
+    m.emissiveNode = vec3(1.0, 0.62, 0.3).mul(glass).mul(l.mul(6));
     return { m, u: { speed: s, phase: ph, lit: l } };
   }
 
   function figure(r: Remote) {
     // the coat dyed their HUD colour, dulled by the winter
-    const { m, u } = material(new THREE.Color(partyColor(r.seed)).multiplyScalar(0.22));
+    const { m, u } = material(new THREE.Color(partyColor(r.seed)).multiplyScalar(0.15));
     const mesh = new THREE.Mesh(body, m);
     mesh.castShadow = mesh.receiveShadow = true;
     const root = new THREE.Group();
     const light = new THREE.PointLight(0xffb066, 0, 14, 1.6);
-    // the lantern hangs at the right hand, forward (the figure faces -z)
-    light.position.set(0.33, 0.85, -0.38);
+    // the lantern hangs from the right hand, held forward (the figure faces -z once turned)
+    light.position.set(-0.31, 0.88, -0.36);
     root.add(mesh, light);
     group.add(root);
     const tag = document.createElement("span");
