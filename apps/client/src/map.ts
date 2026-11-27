@@ -1,7 +1,7 @@
 // The map: drawn once from the world as an image the interface shows under everyone's marks, both
 // behind Tab and turning in the minimap. A winter survey sheet: snow-pale relief, the woods as dark
 // stipple, roads as dark lines, the ice, the fort's stones, and the Column in ember.
-import { BLOCK, HALF, SIZE, SPIRE, WATER_Y, type World } from "@gloamline/world";
+import { BLOCK, COLUMN, HALF, SIZE, WATER_Y, type World } from "@gloamline/world";
 
 const PX = 1024,
   STEP = SIZE / PX;
@@ -79,7 +79,7 @@ export function drawMap(w: World) {
     g.fillRect(u * PX - 1.5, v * PX - 1.5, 3, 3);
   }
   // the Column
-  const [su, sv] = toMap(SPIRE.x, SPIRE.z);
+  const [su, sv] = toMap(COLUMN.x, COLUMN.z);
   g.fillStyle = "#ff7a2f";
   g.beginPath();
   g.arc(su * PX, sv * PX, 7, 0, Math.PI * 2);

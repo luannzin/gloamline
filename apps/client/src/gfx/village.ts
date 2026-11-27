@@ -13,6 +13,7 @@ import {
   hash,
   mix,
   normalLocal,
+  positionGeometry,
   positionLocal,
   positionWorld,
   sin,
@@ -57,7 +58,7 @@ export function makeVillage(world: World, models: Models, detail: THREE.Texture,
     // silver-grey weathered pine, the lower logs darker with damp; char where it burned
     const log = mix(color(0x2a221b), color(0x4a4239), n2.mul(0.6).add(n1.mul(0.4)))
       .mul(0.55)
-      .mul(mix(float(0.7), float(1), smoothstep(0.0, 1.6, positionLocal.y)));
+      .mul(mix(float(0.7), float(1), smoothstep(0.0, 1.6, positionGeometry.y)));
     const charred = mix(log, color(0x070605), flag.mul(smoothstep(0.3, 0.7, n1.add(0.3))));
     const plank = mix(color(0x34302b), color(0x544c43), n2).mul(0.5);
     // trim: white, sky blue, green or ochre, peeling to bare wood

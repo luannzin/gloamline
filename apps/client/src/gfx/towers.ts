@@ -15,6 +15,7 @@ import {
   instancedBufferAttribute,
   mix,
   normalLocal,
+  positionGeometry,
   positionLocal,
   positionWorld,
   sin,
@@ -93,7 +94,8 @@ export function makeTowers(world: World, models: Models, detail: THREE.Texture) 
       m.normalNode = transformNormalToView(turn(normalLocal as never, A.w));
       const iron = attribute("ao", "float");
       // slates: courses up the cone, each slate its own shade, a few gone green with lichen
-      const lp = positionLocal;
+      // (the roof as built: once positionNode is set, positionLocal is the placed position)
+      const lp = positionGeometry;
       const row = floor(lp.y.div(2.6 / 14)),
         ang = atan(lp.z, lp.x)
           .div(Math.PI * 2)

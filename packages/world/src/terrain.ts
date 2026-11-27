@@ -24,7 +24,8 @@ export const NREG = REGIONS.length;
 
 export const KEEP = { x: 380, z: -250, plateau: 132, top: 62 };
 export const HOLLOW = { x: -400, z: -370, floor: 22, radius: 175, peak: 118 };
-export const SPIRE = { x: 70, z: -790 };
+/** The Column: where the blast's smoke still stands, beyond the northern ridge. */
+export const COLUMN = { x: 70, z: -790 };
 
 // Roads, as control points. Each is sampled as a Catmull-Rom curve.
 export const ROADS: number[][] = [

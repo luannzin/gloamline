@@ -2,18 +2,19 @@
 // doing, then runs blurred behind the menu so shaders compile and resolution settles before anyone
 // walks in (DESIGN.md: the world is the menu).
 import "./style.css";
-import { HALF, HOLLOW, Land, NREG, REGIONS, SIZE, SPIRE } from "@gloamline/world";
+import { COLUMN, HALF, HOLLOW, Land, NREG, REGIONS, SIZE } from "@gloamline/world";
 import * as THREE from "three/webgpu";
 import { randomSeed } from "@/lib/avatar";
 import { makeBody } from "./body";
 import { buildWorld } from "./build";
+import { makeColumn } from "./gfx/column";
 import { makeFlora } from "./gfx/flora";
 import { makeGrass } from "./gfx/grass";
 import { loadModels } from "./gfx/models";
 import { makeMood } from "./gfx/mood";
 import { makeParticles } from "./gfx/particles";
 import { makePost, type Quality } from "./gfx/post";
-import { makeCave, makeRuins, makeSpire } from "./gfx/stone";
+import { makeCave, makeRuins } from "./gfx/stone";
 import { makeTerrain } from "./gfx/terrain";
 import { detailTexture, foliageAtlas, groundTextures } from "./gfx/textures";
 import { makeTowers } from "./gfx/towers";
@@ -79,7 +80,7 @@ async function boot() {
   requestAnimationFrame(probe);
   const [world, models] = await Promise.all([
     buildWorld(say),
-    loadModels(["rocks.glb", "trees.glb", "architecture.glb", "wanderer.glb", "spire.glb", "village.glb"]),
+    loadModels(["rocks.glb", "trees.glb", "architecture.glb", "wanderer.glb", "village.glb"]),
   ]);
   const refresh = intervals.length > 20 ? intervals.sort((a, b) => a - b)[intervals.length >> 1] : 1000 / 60;
   say("Lighting the world…", 0.85);
@@ -91,10 +92,10 @@ async function boot() {
   };
   ui.set({
     mapImage: drawMap(world),
-    mapLabels: [...REGIONS.map((r) => label(r.name, r.x, r.z)), label("The Column", SPIRE.x, SPIRE.z + 40)],
+    mapLabels: [...REGIONS.map((r) => label(r.name, r.x, r.z)), label("The Column", COLUMN.x, COLUMN.z + 40)],
   });
   {
-    const [u, v] = toMap(SPIRE.x, SPIRE.z);
+    const [u, v] = toMap(COLUMN.x, COLUMN.z);
     Object.assign(ui.live.goal, { u, v });
   }
   const scene = new THREE.Scene();
@@ -126,7 +127,7 @@ async function boot() {
     particles.group,
     makeRuins(world, detail),
     makeCave(world, detail),
-    makeSpire(world, detail, mood, models),
+    makeColumn(world, detail, mood),
     makeTowers(world, models, detail),
     makeVillage(world, models, detail, mood),
     makeWater(tex.height, detail, mood, q),
@@ -287,7 +288,7 @@ async function boot() {
     m.u = (player.pos.x + HALF) / SIZE;
     m.v = (player.pos.z + HALF) / SIZE;
     m.heading = -player.yaw;
-    ui.live.goal.dist = Math.hypot(player.pos.x - SPIRE.x, player.pos.z - SPIRE.z);
+    ui.live.goal.dist = Math.hypot(player.pos.x - COLUMN.x, player.pos.z - COLUMN.z);
   }
 
   // --- the body: the cold, the bad water, the lantern; when it gives out, you come to at the road ---
