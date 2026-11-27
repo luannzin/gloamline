@@ -36,7 +36,7 @@ function pickQuality(): Quality {
   return mem <= 4 ? 1 : 2;
 }
 
-// fixed viewpoints, keys 1-6 (and the screenshot script): x, z, look-at x, y, z, optional y
+// fixed viewpoints, keys 1-9 (and the screenshot script): x, z, look-at x, y, z, optional y
 const VIEWS: number[][] = [
   [-262, 262, -170, 30, 150],
   [292, 292, 430, 2, 430],

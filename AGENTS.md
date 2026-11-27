@@ -21,10 +21,13 @@ Three.js r187 (WebGPU, TSL), React + coss ui for the interface, Trystero for the
 - **Rendering knows nothing about the network, the network knows nothing about rendering**, and the
   world package knows about neither. The interface meets the game only in `apps/client/src/ui/store.ts`.
 - **Zero per-frame allocations in the hot loop.** Preallocate; reuse vectors.
-- **Everything is generated.** No model or texture files: geometry in `gfx/shapes.ts`, textures in
-  `gfx/textures.ts`. Edit the generator.
+- **Everything is generated.** Textures in `gfx/textures.ts`; small geometry in `gfx/shapes.ts`; trees,
+  rocks, the Spire, roofs, banners and the wanderer by the Blender scripts in `tools/blender` (headless,
+  `-t 4`, outputs committed to `apps/client/public/models`, loaded by `gfx/models.ts`). Edit the
+  generator and rerun it, never the output.
 - **coss components are copied, not edited** (`apps/client/src/components/ui`). The critters and the
   palette are copied from Sightline (`src/lib/avatar.ts`, `palette.ts`); a change there needs copying here.
 - **Checks**: `bun run check` (world contracts, prints `ok`), `bun run typecheck`, `bun run lint`.
-  For visual work, the six viewpoints (`1` to `6`) are the fixed poses to compare.
+  For visual work, the nine viewpoints (`1` to `9`) are the fixed poses to compare; `__game.post.pin(r)`
+  in the dev tools holds the render scale so frames compare fairly.
 - Commits follow Conventional Commits, with no `Co-Authored-By` line.
