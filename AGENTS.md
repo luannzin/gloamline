@@ -11,6 +11,7 @@ Three.js r187 (WebGPU, TSL), React + coss ui for the interface, Trystero for the
 | What does each region look like? | `apps/client/src/gfx/mood.ts` (`MOODS`) |
 | How does it look and read? | `DESIGN.md` (and `docs/REFERENCES.md` for the board behind it) |
 | What's planned, and why this stack? | `docs/PLAN.md` |
+| Who is the survivor, what gear and colours, what is the creature? | `docs/CHARACTERS.md` |
 | How do players meet? | `apps/client/src/net.ts` |
 | What does the map (`Tab`) show? | `apps/client/src/map.ts` (drawn once from the world), `ui/app.tsx` (`WorldMap`) |
 | What does each video setting change? | `apps/client/src/video.ts` (the settings, presets; plain data shared by the game and the settings screen); each system reads its own level where it's made; `dress`, `apply` and the detection test in `main.ts` |

@@ -54,6 +54,22 @@ Sources: [technerdiness, HUD explained](https://www.technerdiness.com/gta/gta-6-
 | `refs/atomic-heart/` | 668580 | Soviet monumental forms (only as a counterpoint: too clean) |
 | `refs/concept/` | the brief | The pitch's own six frames: green forest haze, snow and willows, the campfire, a snowed-in mining village, a pale creature in white-out |
 
+## The bar: Crimson Desert
+
+`refs/crimson-desert/`, `refs/creature/` and `refs/survivor/` came with the brief (copied by hand).
+What the bar is, in docs/CHARACTERS.md and DESIGN.md's Snow:
+
+- **The blizzard is a place.** Flakes streak with the wind, close ones blur past the lens, sheets of
+  snow cross the ground, the far trees go to grey silhouettes in a few tens of metres.
+- **The body is in the snow, not on it.** Legs to the shin in drifts, a real trench behind, snow
+  caked on the shoulders, the pack and the boots.
+- **Layers that move.** Fur, straps, cloth and gear each have their own weight and swing.
+- **The creature** (`refs/creature/`): a pale giant with antlers through its skull, raw red flesh
+  where they broke the hide, against white fur in the white-out.
+- **The survivor** (`refs/survivor/`): Metro Exodus's frozen ruins (snow-crusted kit, a figure from
+  behind against a white void) and Misery's zone survivors (gas masks, a telnyashka, a padded
+  tankist's helmet) as the wardrobe the district would have.
+
 On the real zone: the IAEA describes painted wooden houses with carved window frames, collapsed
 stoves and peeling wallpaper ([IAEA, abandoned villages](https://www.iaea.org/node/9739));
 [Bely Berag](https://histecon.fas.harvard.edu/climate-loss/bely_berag/radioactive.html) shows a
