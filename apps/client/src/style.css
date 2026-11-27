@@ -1,0 +1,136 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", monospace;
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-ring: var(--ring);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-input: var(--input);
+  --color-foreground: var(--foreground);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-background: var(--background);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  /* Gloamline (DESIGN.md) */
+  --color-night: #110d24;
+  --color-dusk-violet: #3a2a6b;
+  --color-dusk-plum: #7a3361;
+  --color-dusk-ember: #e0703f;
+  --color-dusk-gold: #ffd180;
+  --color-ink: #f2ede4;
+  --color-ink-soft: #b9b2a6;
+  --color-ink-muted: #7f786d;
+}
+
+/* coss dark tokens (as in Sightline), the only theme: the world is always behind the interface */
+:root {
+  --radius: 0.625rem;
+  --accent: --alpha(var(--color-white) / 6%);
+  --accent-foreground: var(--color-neutral-100);
+  --background: rgb(12 10 20 / 0.72);
+  --border: --alpha(var(--color-white) / 8%);
+  --destructive: color-mix(in srgb, var(--color-red-500) 90%, var(--color-white));
+  --destructive-foreground: var(--color-red-400);
+  --foreground: var(--color-ink);
+  --input: --alpha(var(--color-white) / 12%);
+  --muted: --alpha(var(--color-white) / 8%);
+  --muted-foreground: var(--color-ink-soft);
+  --popover: rgb(16 13 28 / 0.86);
+  --popover-foreground: var(--color-ink);
+  --primary: var(--color-ink);
+  --primary-foreground: #1a1424;
+  --ring: var(--color-dusk-gold);
+  --secondary: --alpha(var(--color-white) / 6%);
+  --secondary-foreground: var(--color-ink);
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  html,
+  body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--color-night);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+#c {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* the world behind the menu: blurred, darker, a dusk glow rising from the bottom */
+#veil {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  backdrop-filter: blur(14px) brightness(0.55) saturate(0.85);
+  background:
+    linear-gradient(90deg, rgb(10 8 20 / 0.55), transparent 55%),
+    linear-gradient(0deg, rgb(58 42 107 / 0.25), transparent 40%);
+  /* back to the menu (a key press) is quick; into the world, the blur lifts slowly */
+  transition: opacity 200ms ease-out;
+}
+body.playing #veil {
+  opacity: 0;
+  transition-duration: 600ms;
+  transition-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* the menu fades in; it also slides a little when motion is welcome */
+.menu {
+  animation: fade 300ms ease-out both;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .menu {
+    animation: enter 300ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes enter {
+  from {
+    opacity: 0;
+    translate: -8px 0;
+  }
+}
+
+/* A press dips to 0.96 on a strong ease-out. */
+@utility press {
+  transition-property: scale, box-shadow, background-color, border-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  @media (prefers-reduced-motion: no-preference) {
+    &:active:not(:disabled, [aria-disabled="true"]) {
+      scale: 0.96;
+    }
+  }
+}
