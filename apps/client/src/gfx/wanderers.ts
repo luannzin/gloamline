@@ -16,7 +16,7 @@ import {
   vec3,
 } from "three/tsl";
 import * as THREE from "three/webgpu";
-import { DUSK } from "@/lib/palette";
+import { partyColor } from "@/lib/party";
 import { poseAt, type Remote } from "../net";
 import { type Models, model } from "./models";
 
@@ -81,7 +81,8 @@ export function makeWanderers(camera: THREE.Camera, tags: HTMLElement, models: M
   }
 
   function figure(r: Remote) {
-    const { m, u } = material(new THREE.Color(DUSK[r.seed % 4]).multiplyScalar(0.28));
+    // the coat dyed their HUD colour, dulled by the winter
+    const { m, u } = material(new THREE.Color(partyColor(r.seed)).multiplyScalar(0.22));
     const mesh = new THREE.Mesh(body, m);
     mesh.castShadow = mesh.receiveShadow = true;
     const root = new THREE.Group();
@@ -92,7 +93,7 @@ export function makeWanderers(camera: THREE.Camera, tags: HTMLElement, models: M
     group.add(root);
     const tag = document.createElement("span");
     tag.className =
-      "pointer-events-none fixed top-0 left-0 whitespace-nowrap text-ink text-sm [text-shadow:0_1px_6px_#000]";
+      "pointer-events-none fixed top-0 left-0 whitespace-nowrap font-display text-frost text-sm tracking-wide [text-shadow:0_1px_6px_#000]";
     tags.append(tag);
     const f: Figure = { root, light, u, tag, last: new THREE.Vector3(Number.NaN, 0, 0) };
     figures.set(r.id, f);
@@ -129,7 +130,7 @@ export function makeWanderers(camera: THREE.Camera, tags: HTMLElement, models: M
       v.set(o[0], o[1] + 2.15, o[2]).project(camera);
       const d = Math.hypot(o[0] - camera.position.x, o[2] - camera.position.z);
       const show = v.z < 1 && d < 160;
-      const name = r.name || "Wanderer";
+      const name = r.name || "Survivor";
       if (f.tag.textContent !== name) f.tag.textContent = name;
       f.tag.style.opacity = show ? String(Math.min(1, (160 - d) / 40)) : "0";
       f.tag.style.transform = `translate(calc(${((v.x + 1) / 2) * innerWidth}px - 50%), ${((1 - v.y) / 2) * innerHeight}px)`;

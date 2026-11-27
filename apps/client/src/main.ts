@@ -2,9 +2,10 @@
 // doing, then runs blurred behind the menu so shaders compile and resolution settles before anyone
 // walks in (DESIGN.md: the world is the menu).
 import "./style.css";
-import { HOLLOW, Land, NREG, REGIONS, SPIRE } from "@gloamline/world";
+import { HALF, HOLLOW, Land, NREG, REGIONS, SIZE, SPIRE } from "@gloamline/world";
 import * as THREE from "three/webgpu";
 import { randomSeed } from "@/lib/avatar";
+import { makeBody } from "./body";
 import { buildWorld } from "./build";
 import { makeFlora } from "./gfx/flora";
 import { makeGrass } from "./gfx/grass";
@@ -89,8 +90,12 @@ async function boot() {
   };
   ui.set({
     mapImage: drawMap(world),
-    mapLabels: [...REGIONS.map((r) => label(r.name, r.x, r.z)), label("Pale Spire", SPIRE.x, SPIRE.z + 40)],
+    mapLabels: [...REGIONS.map((r) => label(r.name, r.x, r.z)), label("The Column", SPIRE.x, SPIRE.z + 40)],
   });
+  {
+    const [u, v] = toMap(SPIRE.x, SPIRE.z);
+    Object.assign(ui.live.goal, { u, v });
+  }
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 3200);
   const tex = groundTextures(world);
@@ -132,7 +137,8 @@ async function boot() {
   scene.add(lantern);
   let lanternOn = false;
 
-  const player = makePlayer(world, camera, canvas);
+  const body = makeBody();
+  const player = makePlayer(world, camera, canvas, () => body.canRun);
   const post = makePost(renderer, scene, camera, mood, q);
   post.target = Math.max(1000 / 240, refresh);
 
@@ -165,9 +171,18 @@ async function boot() {
   };
   localStorage.setItem("seed", String(me.seed));
   let lobby: Lobby | null = null;
+  // who was here last time, to say in the feed who came and who went
+  let known = new Map<string, string>();
   const party = () => {
     const list: Person[] = [{ id: "me", name: me.name, seed: me.seed, you: true }];
-    for (const r of lobby?.people.values() ?? []) list.push({ id: r.id, name: r.name, seed: r.seed });
+    const now = new Map<string, string>();
+    for (const r of lobby?.people.values() ?? []) {
+      list.push({ id: r.id, name: r.name, seed: r.seed });
+      now.set(r.id, r.name || "A survivor");
+      if (!known.has(r.id)) ui.note(`${r.name || "A survivor"} found you`, "warm");
+    }
+    for (const [id, name] of known) if (!now.has(id)) ui.note(`${name} is gone`, "cold");
+    known = now;
     ui.set({ party: list });
   };
   async function join(secret: string) {
@@ -218,7 +233,10 @@ async function boot() {
       player.teleport(p[0], p[1], p[2], p[3], p[4], p[5]);
     }
     if (e.code === "KeyH") showStats = !showStats;
-    if (e.code === "KeyF" && playing) lanternOn = !lanternOn;
+    if (e.code === "KeyF" && playing) {
+      lanternOn = !lanternOn;
+      ui.note(lanternOn ? "Lantern lit" : "Lantern out", lanternOn ? "warm" : undefined);
+    }
     if (e.code === "Tab") {
       // Tab would walk the focus through the page: here it opens the map
       e.preventDefault();
@@ -246,22 +264,61 @@ async function boot() {
     if (edge > 0.6) best = 4;
     if (w[best] > 0.62 && best !== area) {
       area = best;
-      ui.set({ area: { name: REGIONS[best].name, key: ++areaKey } });
+      ui.set({ area: { name: REGIONS[best].name, ru: REGIONS[best].ru, key: ++areaKey } });
     }
   }
 
-  // --- the map's marks: you and everyone in the lobby, ten times a second while it's open ---
+  // --- the HUD's live channel: you every frame, everyone else ten times a second ---
   const pose = new Float32Array(5);
-  function marks() {
-    const [u, v] = toMap(player.pos.x, player.pos.z);
-    const list: Mark[] = [{ id: "me", name: me.name, seed: me.seed, you: true, u, v, heading: -player.yaw }];
+  function others() {
+    const list: Mark[] = [];
     const t = performance.now() - 100;
     for (const r of lobby?.people.values() ?? []) {
       if (!poseAt(r, t, pose)) continue;
       const [ru, rv] = toMap(pose[0], pose[2]);
       list.push({ id: r.id, name: r.name, seed: r.seed, u: ru, v: rv, heading: -pose[3] });
     }
-    ui.set({ marks: list });
+    ui.live.others = list;
+  }
+  function live() {
+    const m = ui.live.me;
+    m.u = (player.pos.x + HALF) / SIZE;
+    m.v = (player.pos.z + HALF) / SIZE;
+    m.heading = -player.yaw;
+    ui.live.goal.dist = Math.hypot(player.pos.x - SPIRE.x, player.pos.z - SPIRE.z);
+  }
+
+  // --- the body: the cold, the bad water, the lantern; when it gives out, you come to at the road ---
+  const shown = { ...body.v };
+  let vitalsT = 0;
+  function vitals(dt: number) {
+    const down = body.update(dt, {
+      running: player.running,
+      open: mood.u.open.value,
+      cold: mood.u.snowfall.value,
+      lantern: lanternOn,
+      bad: mood.u.fireflies.value,
+    });
+    if (down) {
+      body.reset();
+      player.teleport(world.spawn[0], world.spawn[2], v[2], v[3], v[4]);
+      ui.note("You came to by the road", "cold");
+    }
+    const b = body.v;
+    // the HUD hears about it at most ten times a second, and only when something moved
+    vitalsT += dt;
+    if (vitalsT < 0.1) return;
+    vitalsT = 0;
+    if (
+      Math.abs(b.health - shown.health) +
+        Math.abs(b.stamina - shown.stamina) +
+        Math.abs(b.warmth - shown.warmth) +
+        Math.abs(b.rad - shown.rad) >
+      0.004
+    ) {
+      Object.assign(shown, b);
+      ui.set({ vitals: { ...b } });
+    }
   }
 
   let last = performance.now(),
@@ -275,11 +332,15 @@ async function boot() {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     tick(dt, playing);
-    if (playing) areaCheck();
+    if (playing) {
+      areaCheck();
+      vitals(dt);
+    }
+    live();
     marksT += dt;
-    if (marksT > 0.1 && ui.get().mapOpen) {
+    if (marksT > 0.1) {
       marksT = 0;
-      marks();
+      others();
     }
     if (lobby) {
       wanderers.update(lobby.people);
@@ -305,7 +366,9 @@ async function boot() {
   });
   // a handle for poking at the running game from the dev tools (fixed poses, timings)
   if (import.meta.env.DEV)
-    Object.assign(window, { __game: { player, camera, mood, VIEWS, scene, post, renderer, wanderers } });
+    Object.assign(window, {
+      __game: { player, camera, mood, VIEWS, scene, post, renderer, wanderers, body, ui },
+    });
 }
 
 boot().catch((e) => {

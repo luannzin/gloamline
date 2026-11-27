@@ -6,24 +6,29 @@ export type Phase = "loading" | "menu" | "playing";
 export type Person = { id: string; name: string; seed: number; you?: boolean };
 /** Someone on the map: map position (0..1, north up) and heading (radians, clockwise from north). */
 export type Mark = Person & { u: number; v: number; heading: number };
+/** The body, 0..1 each: full health, stamina and warmth are 1; no radiation is 0. */
+export type Vitals = { health: number; stamina: number; warmth: number; rad: number };
+export type Note = { id: number; text: string; tone?: "warm" | "cold" };
 
 export type UIState = {
   phase: Phase;
   stage: string;
   progress: number;
   quality: number;
-  /** the area name being revealed, and a counter so the same area can reveal twice */
-  area: { name: string; key: number } | null;
+  /** the place being revealed, and a counter so the same place can reveal twice */
+  area: { name: string; ru: string; key: number } | null;
   party: Person[];
   invite: string | null;
   full: boolean;
   stats: string | null;
   error: string | null;
-  /** the map (a data URL, drawn once from the world), whether it's open, and who's where */
+  /** the map (a data URL, drawn once from the world) and the place names on it */
   mapImage: string | null;
   mapLabels: { name: string; u: number; v: number }[];
   mapOpen: boolean;
-  marks: Mark[];
+  vitals: Vitals;
+  /** the feed above the minimap, newest last */
+  notes: Note[];
 };
 
 let state: UIState = {
@@ -40,9 +45,11 @@ let state: UIState = {
   mapImage: null,
   mapLabels: [],
   mapOpen: false,
-  marks: [],
+  vitals: { health: 1, stamina: 1, warmth: 1, rad: 0 },
+  notes: [],
 };
 const listeners = new Set<() => void>();
+let noteId = 0;
 
 export const ui = {
   get: () => state,
@@ -53,6 +60,22 @@ export const ui = {
   subscribe(l: () => void) {
     listeners.add(l);
     return () => listeners.delete(l);
+  },
+  /** Adds a line to the feed; it leaves on its own after 4 s. */
+  note(text: string, tone?: Note["tone"]) {
+    const n = { id: ++noteId, text, tone };
+    ui.set({ notes: [...state.notes.slice(-3), n] });
+    setTimeout(() => ui.set({ notes: state.notes.filter((x) => x !== n) }), 4000);
+  },
+  /**
+   * Written by the game every frame and read by the HUD in its own animation frame, so the minimap
+   * turns at the display's rate without a React render per frame. `others` changes ten times a second.
+   */
+  live: {
+    me: { u: 0.5, v: 0.5, heading: 0 },
+    others: [] as Mark[],
+    /** the Column on the map, and how far it is (m) */
+    goal: { u: 0.5, v: 0, dist: 0 },
   },
   /** Filled in by the game once it can act on them. */
   actions: {

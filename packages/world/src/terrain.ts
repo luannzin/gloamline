@@ -9,15 +9,16 @@ export const HALF = SIZE / 2;
 export const WATER_Y = 3;
 
 export type RegionId = "gloamwood" | "mire" | "keep" | "hollow" | "highlands";
-export type Region = { id: RegionId; name: string; x: number; z: number; r: number };
+/** `ru`: the name as it's lettered on the signs there. The ids are the code's, from before the flash. */
+export type Region = { id: RegionId; name: string; ru: string; x: number; z: number; r: number };
 
-// -z is north. Gloamwood is where everyone wakes up.
+// -z is north. Chernolesye, the black wood, is where everyone wakes up.
 export const REGIONS: Region[] = [
-  { id: "gloamwood", name: "Gloamwood", x: -260, z: 230, r: 430 },
-  { id: "mire", name: "The Mire", x: 360, z: 360, r: 340 },
-  { id: "keep", name: "Cinder Keep", x: 380, z: -250, r: 260 },
-  { id: "hollow", name: "The Hollow", x: -400, z: -370, r: 270 },
-  { id: "highlands", name: "Pale Highlands", x: 0, z: -430, r: 500 },
+  { id: "gloamwood", name: "Chernolesye", ru: "Чернолесье", x: -260, z: 230, r: 430 },
+  { id: "mire", name: "Gniloye Marsh", ru: "Гнилое болото", x: 360, z: 360, r: 340 },
+  { id: "keep", name: "The Old Ostrog", ru: "Старый острог", x: 380, z: -250, r: 260 },
+  { id: "hollow", name: "Shaft No. 9", ru: "Шахта № 9", x: -400, z: -370, r: 270 },
+  { id: "highlands", name: "Kolkhoz Zarya", ru: "Колхоз «Заря»", x: 0, z: -430, r: 500 },
 ];
 export const NREG = REGIONS.length;
 

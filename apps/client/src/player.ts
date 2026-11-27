@@ -57,7 +57,13 @@ function index(w: World): Obstacles {
   return { circles, cells };
 }
 
-export function makePlayer(world: World, camera: THREE.PerspectiveCamera, dom: HTMLElement) {
+/** `canRun`: whether the body has the breath for it (body.ts). */
+export function makePlayer(
+  world: World,
+  camera: THREE.PerspectiveCamera,
+  dom: HTMLElement,
+  canRun: () => boolean,
+) {
   const obs = index(world);
   const pos = new THREE.Vector3(world.spawn[0], world.spawn[1], world.spawn[2]);
   const vel = new THREE.Vector3();
@@ -65,6 +71,7 @@ export function makePlayer(world: World, camera: THREE.PerspectiveCamera, dom: H
     pitch = 0,
     onGround = false,
     fly = false,
+    running = false,
     bob = 0,
     breath = 0;
   const keys = new Set<string>();
@@ -211,7 +218,7 @@ export function makePlayer(world: World, camera: THREE.PerspectiveCamera, dom: H
     right.set(Math.cos(yaw), 0, -Math.sin(yaw));
     const mx = k("KeyD") - k("KeyA"),
       mz = k("KeyW") - k("KeyS");
-    const run = k("ShiftLeft") || k("ShiftRight");
+    const run = (k("ShiftLeft") || k("ShiftRight")) && (fly || canRun());
     if (fly) {
       const sp = run ? 60 : 18;
       pos.addScaledVector(fwd, mz * sp * dt).addScaledVector(right, mx * sp * dt);
@@ -249,6 +256,7 @@ export function makePlayer(world: World, camera: THREE.PerspectiveCamera, dom: H
       pos.z = Math.max(-HALF + 40, Math.min(HALF - 40, pos.z));
       const moving = Math.hypot(vel.x, vel.z);
       if (onGround && moving > 0.5) bob += dt * moving * 2.1;
+      running = !!run && moving > 5;
     }
     breath += dt;
     // a body breathing and walking: two slow sines and the step bob
@@ -276,6 +284,9 @@ export function makePlayer(world: World, camera: THREE.PerspectiveCamera, dom: H
     teleport,
     get yaw() {
       return yaw;
+    },
+    get running() {
+      return running && !fly;
     },
   };
 }

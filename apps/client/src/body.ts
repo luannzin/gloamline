@@ -1,0 +1,57 @@
+// The survivor's body: stamina spent running, warmth lost to the cold and won back by the lantern or
+// a roof of rock, radiation taken from the bad water, and health that pays for the last two. Rates
+// are per second, tuned so a full body lasts a few minutes in the open snow without a light.
+import type { Vitals } from "./ui/store";
+
+export type Exposure = {
+  running: boolean;
+  /** 1 under the open sky, 0 under rock */
+  open: number;
+  /** how hard the snow is blowing here (the mood's snowfall, 0..1) */
+  cold: number;
+  lantern: boolean;
+  /** how bad the water is here (the mood's green motes, 0..1) */
+  bad: number;
+};
+
+const clamp = (x: number) => Math.min(1, Math.max(0, x));
+
+export function makeBody() {
+  const v: Vitals = { health: 1, stamina: 1, warmth: 1, rad: 0 };
+  let rested = 0,
+    spent = false;
+  return {
+    v,
+    /** Out of breath at zero; running again once a third has come back. */
+    get canRun() {
+      return !spent;
+    },
+    /** Returns true when the body gives out. */
+    update(dt: number, e: Exposure) {
+      if (e.running) {
+        v.stamina = clamp(v.stamina - 0.14 * dt);
+        rested = 0;
+        if (v.stamina === 0) spent = true;
+      } else {
+        rested += dt;
+        if (rested > 0.9) v.stamina = clamp(v.stamina + 0.28 * dt);
+      }
+      if (spent && v.stamina > 0.33) spent = false;
+
+      const chill = e.open * (0.004 + e.cold * 0.004);
+      const heat = (e.lantern ? 0.012 : 0) + (1 - e.open) * 0.003 + (e.running ? 0.002 : 0);
+      v.warmth = clamp(v.warmth - (chill - heat) * dt);
+      v.rad = clamp(v.rad + (e.bad * 0.006 - 0.002) * dt);
+
+      let hurt = 0;
+      if (v.warmth === 0) hurt += 0.01;
+      if (v.rad > 0.75) hurt += 0.008;
+      v.health = clamp(v.health + (hurt ? -hurt : v.warmth > 0.4 && v.rad < 0.5 ? 0.006 : 0) * dt);
+      return v.health === 0;
+    },
+    reset() {
+      Object.assign(v, { health: 1, stamina: 1, warmth: 1, rad: 0 });
+      spent = false;
+    },
+  };
+}
