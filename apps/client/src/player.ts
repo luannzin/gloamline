@@ -47,7 +47,7 @@ function index(w: World): Obstacles {
   };
   for (let i = 0; i < circles.length / 4; i++)
     span(circles[i * 4], circles[i * 4 + 1], circles[i * 4 + 2], (e) => e.c.push(i));
-  const B = w.ruins;
+  const B = w.solid;
   for (let i = 0; i < B.length / BLOCK; i++) {
     if (!B[i * BLOCK + 8]) continue;
     const o = i * BLOCK,
@@ -75,7 +75,8 @@ export function makePlayer(
     bob = 0,
     breath = 0;
   const keys = new Set<string>();
-  const B = world.ruins;
+  // the ruins' solid stones and the village's walls (world: index.ts)
+  const B = world.solid;
 
   addEventListener("keydown", (e) => {
     keys.add(e.code);

@@ -24,7 +24,7 @@ export async function buildWorld(say: (stage: string, share: number) => void, se
       w.onmessage = (e) => {
         results[e.data.id] = e.data.result;
         say(
-          done < list.length / 2 ? "Raising the land…" : "Carving the Hollow…",
+          done < list.length / 2 ? "Raising the land…" : "Digging the mine…",
           0.05 + (++done / list.length) * 0.6,
         );
         if (done === list.length) resolve();

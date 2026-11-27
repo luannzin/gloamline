@@ -363,7 +363,7 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number
       lodAt: Infinity,
       radius: 1.5,
       shadow: false,
-      variants: range(2).map((i) => ({ near: [[S.fern(400 + i), leaf(0x5a3c22, 0x4e4230, 0.12)]] })),
+      variants: range(2).map((i) => ({ near: [[S.fern(400 + i), leaf(0x9a6436, 0x7e6a48, 0.12)]] })),
     },
     {
       kind: "reed",

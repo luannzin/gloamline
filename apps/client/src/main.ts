@@ -17,6 +17,7 @@ import { makeCave, makeRuins, makeSpire } from "./gfx/stone";
 import { makeTerrain } from "./gfx/terrain";
 import { detailTexture, foliageAtlas, groundTextures } from "./gfx/textures";
 import { makeTowers } from "./gfx/towers";
+import { makeVillage } from "./gfx/village";
 import { makeWanderers } from "./gfx/wanderers";
 import { makeWater } from "./gfx/water";
 import { drawMap, toMap } from "./map";
@@ -78,7 +79,7 @@ async function boot() {
   requestAnimationFrame(probe);
   const [world, models] = await Promise.all([
     buildWorld(say),
-    loadModels(["rocks.glb", "trees.glb", "architecture.glb", "wanderer.glb", "spire.glb"]),
+    loadModels(["rocks.glb", "trees.glb", "architecture.glb", "wanderer.glb", "spire.glb", "village.glb"]),
   ]);
   const refresh = intervals.length > 20 ? intervals.sort((a, b) => a - b)[intervals.length >> 1] : 1000 / 60;
   say("Lighting the world…", 0.85);
@@ -127,6 +128,7 @@ async function boot() {
     makeCave(world, detail),
     makeSpire(world, detail, mood, models),
     makeTowers(world, models, detail),
+    makeVillage(world, models, detail, mood),
     makeWater(tex.height, detail, mood, q),
     wanderers.group,
   );

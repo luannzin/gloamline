@@ -5,11 +5,14 @@ import {
   caveAt,
   HALF,
   HOLLOW,
+  HOUSE,
   heightAt,
   KEEP,
   KINDS,
   Land,
   NREG,
+  POLE,
+  PROP,
   SEED,
   SIZE,
   WATER_Y,
@@ -84,4 +87,36 @@ for (const k of KINDS) console.log(`${k.padEnd(11)} ${w.props[k].length / 5}`);
 assert(w.props.oak.length / 5 > 2000, "a forest");
 assert(w.props.shroom.length > 0 && w.props.grave.length > 0 && w.props.reed.length > 0, "every kind placed");
 assert(SIZE === 2048, "size");
+
+// the village: houses standing back from the road, no tree inside a plot, nobody walled in at spawn
+const V = w.village;
+console.log(
+  `village     ${V.houses.length / HOUSE} houses, ${V.poles.length / POLE} poles, ${V.props.length / PROP} props`,
+);
+assert(V.houses.length / HOUSE >= 10, "a village");
+const r0 = w.roads[0];
+for (let i = 0; i < V.houses.length; i += HOUSE) {
+  let d = Infinity;
+  for (let j = 0; j < r0.length; j += 3)
+    d = Math.min(d, Math.hypot(V.houses[i] - r0[j], V.houses[i + 2] - r0[j + 1]));
+  assert(d > 9, `house ${i / HOUSE} stands back from the road (${d.toFixed(1)} m)`);
+}
+for (const k of ["oak", "pine", "dead", "rock"] as const) {
+  const p = w.props[k];
+  for (let i = 0; i < p.length; i += 5)
+    for (let c = 0; c < V.clear.length; c += 3)
+      assert(
+        Math.hypot(p[i] - V.clear[c], p[i + 2] - V.clear[c + 1]) >= V.clear[c + 2],
+        `no ${k} inside a plot`,
+      );
+}
+const S = w.solid;
+for (let o = 0; o < S.length; o += BLOCK) {
+  const c = Math.cos(-S[o + 6]),
+    s = Math.sin(-S[o + 6]);
+  const dx = w.spawn[0] - S[o],
+    dz = w.spawn[2] - S[o + 2];
+  const inside = Math.abs(dx * c - dz * s) < S[o + 3] / 2 && Math.abs(dx * s + dz * c) < S[o + 5] / 2;
+  assert(!inside, "spawn is clear of walls");
+}
 console.log("ok");
