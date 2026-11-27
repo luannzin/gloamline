@@ -2,7 +2,7 @@
 // doing, then runs blurred behind the menu so shaders compile and resolution settles before anyone
 // walks in (DESIGN.md: the world is the menu).
 import "./style.css";
-import { HOLLOW, Land, NREG, REGIONS } from "@gloamline/world";
+import { HOLLOW, Land, NREG, REGIONS, SPIRE } from "@gloamline/world";
 import * as THREE from "three/webgpu";
 import { randomSeed } from "@/lib/avatar";
 import { buildWorld } from "./build";
@@ -16,18 +16,19 @@ import { makeTerrain } from "./gfx/terrain";
 import { detailTexture, foliageAtlas, groundTextures } from "./gfx/textures";
 import { makeWanderers } from "./gfx/wanderers";
 import { makeWater } from "./gfx/water";
-import { type Lobby, newSecret, openLobby, secretFromHash } from "./net";
+import { drawMap, toMap } from "./map";
+import { type Lobby, newSecret, openLobby, poseAt, secretFromHash } from "./net";
 import { makePlayer } from "./player";
 import { mountUI } from "./ui/mount";
-import { type Person, ui } from "./ui/store";
+import { type Mark, type Person, ui } from "./ui/store";
 
 const canvas = document.getElementById("c") as HTMLCanvasElement;
 mountUI(document.getElementById("ui")!);
 const say = (stage: string, progress: number) => ui.set({ stage, progress });
 
 function pickQuality(): Quality {
-  const saved = localStorage.getItem("quality");
-  if (saved !== null) return Number(saved) as Quality;
+  const saved = Number(localStorage.getItem("quality") ?? Number.NaN);
+  if (saved >= 0 && saved <= 3) return saved as Quality;
   const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8;
   if (matchMedia("(pointer: coarse)").matches) return 0;
   return mem <= 4 ? 1 : 2;
@@ -71,17 +72,35 @@ async function boot() {
   say("Lighting the world…", 0.85);
 
   const land = new Land(world.seed);
+  const label = (name: string, x: number, z: number) => {
+    const [u, v] = toMap(x, z);
+    return { name, u, v };
+  };
+  ui.set({
+    mapImage: drawMap(world),
+    mapLabels: [...REGIONS.map((r) => label(r.name, r.x, r.z)), label("Pale Spire", SPIRE.x, SPIRE.z + 40)],
+  });
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 3200);
   const tex = groundTextures(world);
   const detail = detailTexture();
   const atlas = foliageAtlas();
-  const mood = makeMood(land, world);
+  const mood = makeMood(land, world, detail, q);
   scene.add(mood.sun, mood.sun.target, mood.hemi, mood.dome);
   scene.fogNode = mood.fogNode;
-  const terrain = makeTerrain(tex, detail, mood);
+  // image-based light from the sky itself, redrawn when the sky has changed enough (mood.ts)
+  const pmrem = q > 0 ? new THREE.PMREMGenerator(renderer) : null;
+  let envRT: THREE.RenderTarget | null = null;
+  const envUpdate = () => {
+    if (pmrem && mood.envDue()) {
+      envRT = pmrem.fromScene(mood.skyScene, 0, 1, 3000, { size: 256, renderTarget: envRT as never });
+      scene.environment = envRT.texture;
+    }
+    scene.environmentIntensity = mood.envIntensity;
+  };
+  const terrain = makeTerrain(tex, detail, mood, q);
   const flora = makeFlora(world, { ground0: tex.ground0, detail, atlas }, mood, q);
-  const grass = q > 0 ? makeGrass(tex, mood, q) : null;
+  const grass = q > 0 ? makeGrass(tex, detail, mood, q) : null;
   const particles = makeParticles(tex.height, mood, q);
   const wanderers = makeWanderers(camera, document.getElementById("tags")!);
   scene.add(
@@ -110,6 +129,7 @@ async function boot() {
   const tick = (dt: number, active: boolean) => {
     player.update(dt, active);
     mood.update(camera.position, dt);
+    envUpdate();
     terrain.update(camera);
     camera.updateMatrixWorld();
     flora.update(camera);
@@ -162,7 +182,7 @@ async function boot() {
   const setPlaying = (on: boolean) => {
     playing = on;
     document.body.classList.toggle("playing", on);
-    ui.set({ phase: on ? "playing" : "menu" });
+    ui.set({ phase: on ? "playing" : "menu", mapOpen: false });
   };
   ui.actions.enter = (name) => {
     me.name = name;
@@ -187,6 +207,14 @@ async function boot() {
     }
     if (e.code === "KeyH") showStats = !showStats;
     if (e.code === "KeyF" && playing) lanternOn = !lanternOn;
+    if (e.code === "Tab") {
+      // Tab would walk the focus through the page: here it opens the map
+      e.preventDefault();
+      if (playing && !e.repeat) {
+        ui.set({ mapOpen: !ui.get().mapOpen });
+        marksT = 1;
+      }
+    }
   });
   addEventListener("resize", () => {
     camera.aspect = innerWidth / innerHeight;
@@ -210,10 +238,25 @@ async function boot() {
     }
   }
 
+  // --- the map's marks: you and everyone in the lobby, ten times a second while it's open ---
+  const pose = new Float32Array(5);
+  function marks() {
+    const [u, v] = toMap(player.pos.x, player.pos.z);
+    const list: Mark[] = [{ id: "me", name: me.name, seed: me.seed, you: true, u, v, heading: -player.yaw }];
+    const t = performance.now() - 100;
+    for (const r of lobby?.people.values() ?? []) {
+      if (!poseAt(r, t, pose)) continue;
+      const [ru, rv] = toMap(pose[0], pose[2]);
+      list.push({ id: r.id, name: r.name, seed: r.seed, u: ru, v: rv, heading: -pose[3] });
+    }
+    ui.set({ marks: list });
+  }
+
   let last = performance.now(),
     statT = 0,
     frames = 0,
     sendT = 0,
+    marksT = 0,
     showStats = false;
   renderer.setAnimationLoop(() => {
     const now = performance.now();
@@ -221,6 +264,11 @@ async function boot() {
     last = now;
     tick(dt, playing);
     if (playing) areaCheck();
+    marksT += dt;
+    if (marksT > 0.1 && ui.get().mapOpen) {
+      marksT = 0;
+      marks();
+    }
     if (lobby) {
       wanderers.update(lobby.people);
       sendT += dt;
@@ -245,7 +293,7 @@ async function boot() {
   });
   // a handle for poking at the running game from the dev tools (fixed poses, timings)
   if (import.meta.env.DEV)
-    Object.assign(window, { __game: { player, camera, mood, VIEWS, scene, post, renderer } });
+    Object.assign(window, { __game: { player, camera, mood, VIEWS, scene, post, renderer, wanderers } });
 }
 
 boot().catch((e) => {

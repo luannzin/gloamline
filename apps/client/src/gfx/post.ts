@@ -1,13 +1,19 @@
 // The lens, after abyssal-garden's composite: the scene, sun shafts marched through the shadow map
 // and blurred, a soft bloom mixed in (a haze around light, not a glow on everything), exposure, a
 // gentle vignette, a filmic curve, an S-curve on luminance, highlights that lose a little colour, and
-// a triangular dither that kills banding in the fog. Resolution scales itself to hold the frame rate.
+// a triangular dither that kills banding in the fog.
+//
+// From Medium up the scene renders below the output resolution with a jittered camera, and a
+// temporal upscaler (TAAU: Karis 2014, FSR 2's resolve) rebuilds a full-resolution image from the
+// last frames, so a frame rendered at 60% of the pixels reads sharper than the old native-plus-SMAA.
+// The input scale is what dynamic resolution moves to hold the display's rate.
 
 import { bilateralBlur } from "three/addons/tsl/display/BilateralBlurNode.js";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import { godrays } from "three/addons/tsl/display/GodraysNode.js";
 import { ao } from "three/addons/tsl/display/GTAONode.js";
-import { smaa } from "three/addons/tsl/display/SMAANode.js";
+import { sharpen } from "three/addons/tsl/display/SharpenNode.js";
+import { taau } from "three/addons/tsl/display/TAAUNode.js";
 import {
   dot,
   exp,
@@ -28,11 +34,13 @@ import {
   vec2,
   vec3,
   vec4,
+  velocity,
 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import type { MoodState } from "./mood";
 
-export type Quality = 0 | 1 | 2; // low, medium, high
+/** low, medium, high, ultra */
+export type Quality = 0 | 1 | 2 | 3;
 
 type V3 = ReturnType<typeof vec3>;
 
@@ -46,9 +54,19 @@ export function makePost(
   const pipe = new THREE.RenderPipeline(renderer);
   pipe.outputColorTransform = false;
   const scenePass = pass(scene, camera);
-  if (q > 0) scenePass.setMRT(mrt({ output, normal: normalView }));
-  const col = scenePass.getTextureNode("output");
+  const temporal = q > 0;
+  if (temporal) scenePass.setMRT(mrt({ output, normal: normalView, velocity }));
+  const raw = scenePass.getTextureNode("output");
   const depth = scenePass.getTextureNode("depth");
+  // the image every later stage reads: upscaled and settled over frames, or the raw pass on Low
+  let col: THREE.TextureNode = raw;
+  if (temporal) {
+    const t = taau(raw, depth, scenePass.getTextureNode("velocity"), camera);
+    // grass and leaves move in the vertex shader, which the velocity can't see: trust the
+    // current frame a little more than the default so they don't smear
+    t.currentFrameWeight = 0.06;
+    col = t.getTextureNode();
+  }
   const u = mood.u;
   // where the sun is on screen (x, y in uv; z: 1 in front of the camera, 0 behind)
   const sunUV = uniform(new THREE.Vector3());
@@ -58,15 +76,15 @@ export function makePost(
   if (q > 0) {
     const a = ao(depth, scenePass.getTextureNode("normal"), camera);
     a.resolutionScale = 0.5;
-    a.radius.value = 0.5;
+    a.radius.value = q > 2 ? 0.7 : 0.5;
     a.thickness.value = 1.5;
-    a.samples.value = q > 1 ? 12 : 8;
+    a.samples.value = [0, 6, 12, 16][q];
     aoTex = a.getTextureNode();
   }
   let rays: THREE.TextureNode | null = null;
   if (q > 0) {
     const g = godrays(depth, camera, mood.sun);
-    g.raymarchSteps.value = q > 1 ? 40 : 24;
+    g.raymarchSteps.value = [0, 20, 40, 60][q];
     g.density.value = 0.9;
     g.maxDensity.value = 0.85;
     g.distanceAttenuation.value = 1.5;
@@ -110,27 +128,39 @@ export function makePost(
       .sub(1);
     return vec4(s.add(n.div(255)), 1);
   })();
-  pipe.outputNode = q > 0 ? smaa(graded) : graded;
+  // the upscaler's resolve is soft: a contrast-adaptive sharpen gives the detail back
+  pipe.outputNode = temporal ? sharpen(graded, q > 2 ? 0.45 : 0.6) : graded;
 
-  // dynamic resolution: the pixel ratio follows the frame time toward the display's own rate
-  const maxRatio = Math.min(window.devicePixelRatio, 1);
-  let ratio = q > 1 ? 1 : 0.8,
+  // dynamic resolution. Low scales the canvas itself; the others keep the output at the display's
+  // pixels (up to 1.5x on Ultra) and scale only what the scene renders
+  const dpr = window.devicePixelRatio;
+  const outRatio = temporal ? Math.min(dpr, q > 2 ? 1.5 : 1) : 1;
+  const lo = temporal ? [0, 0.45, 0.5, 0.6][q] : 0.5;
+  const hi = temporal ? 1 : Math.min(dpr, 1);
+  let ratio = [0.7, 0.6, 0.75, 1][q],
     acc = 0,
     frames = 0,
     target = 1000 / 60;
-  renderer.setPixelRatio(ratio);
+  const apply = () => {
+    if (temporal) scenePass.setResolutionScale(ratio);
+    else renderer.setPixelRatio(ratio);
+  };
+  if (temporal) renderer.setPixelRatio(outRatio);
+  apply();
+  let pinned = false;
   function adapt(dt: number) {
+    if (pinned) return;
     acc += dt;
     frames++;
     if (acc < 0.75) return;
     const ms = (acc / frames) * 1000;
     acc = frames = 0;
     let next = ratio;
-    if (ms > target * 1.12) next = Math.max(0.5, ratio * Math.sqrt(target / ms));
-    else if (ms < target * 0.85) next = Math.min(maxRatio, ratio * 1.06);
+    if (ms > target * 1.12) next = Math.max(lo, ratio * Math.sqrt(target / ms));
+    else if (ms < target * 0.85) next = Math.min(hi, ratio * 1.06);
     if (Math.abs(next - ratio) > 0.02) {
       ratio = next;
-      renderer.setPixelRatio(ratio);
+      apply();
     }
   }
   const v = new THREE.Vector3();
@@ -144,8 +174,17 @@ export function makePost(
     pipe,
     adapt,
     frame,
+    /** Share of the output's pixels the scene renders (or the canvas pixel ratio on Low). */
     get ratio() {
       return ratio;
+    },
+    /** Holds the resolution at `r` (for comparing frames at fixed poses), or frees it with null. */
+    pin(r: number | null) {
+      pinned = r !== null;
+      if (r !== null) {
+        ratio = r;
+        apply();
+      }
     },
     /** Frame time to hold, from the display's refresh (measured by the caller). */
     set target(ms: number) {

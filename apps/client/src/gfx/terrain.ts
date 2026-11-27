@@ -6,14 +6,18 @@ import { HALF, SIZE, WATER_Y } from "@gloamline/world";
 import {
   Fn,
   float,
+  fract,
   instancedDynamicBufferAttribute,
   int,
   ivec2,
+  Loop,
   max,
+  min,
   mix,
   normalize,
   positionLocal,
   positionWorld,
+  select,
   smoothstep,
   sqrt,
   texture,
@@ -25,6 +29,9 @@ import {
 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import type { MoodState } from "./mood";
+
+type Node2 = THREE.Node<"vec2">;
+type Node4 = THREE.Node<"vec4">;
 
 const CHUNK = 64,
   N = SIZE / CHUNK;
@@ -78,11 +85,34 @@ function grid(seg: number) {
 }
 
 export function makeTerrain(
-  tex: { height: THREE.DataTexture; ground0: THREE.DataTexture; ground1: THREE.DataTexture },
+  tex: {
+    height: THREE.DataTexture;
+    ground0: THREE.DataTexture;
+    ground1: THREE.DataTexture;
+    stones: THREE.Texture;
+  },
   detail: THREE.Texture,
   mood: MoodState,
+  quality: number,
 ) {
   const group = new THREE.Group();
+  // a march along the sun over the height texture, with a penumbra that widens with distance
+  const far = Fn(() => {
+    const L = mood.u.sunDir;
+    const o = positionWorld.add(vec3(0, 0.4, 0));
+    const s = float(1).toVar(),
+      t = float(3).toVar();
+    Loop(15, () => {
+      const p = o.add(L.mul(t));
+      const h = textureLoad(
+        tex.height,
+        ivec2(int(p.x.add(HALF).clamp(0, SIZE - 1)), int(p.z.add(HALF).clamp(0, SIZE - 1))),
+      ).x;
+      s.assign(min(s, p.y.sub(h).mul(7).div(t)));
+      t.mulAssign(1.4);
+    });
+    return smoothstep(0, 1, s);
+  })();
   // per chunk: min and max height, for culling
   const hmin = new Float32Array(N * N),
     hmax = new Float32Array(N * N);
@@ -128,7 +158,10 @@ export function makeTerrain(
     m.colorNode = shade.color;
     m.normalNode = shade.normal;
     m.roughnessNode = shade.rough;
+    m.aoNode = shade.ao;
     m.metalnessNode = float(0);
+    // long shadows past the shadow map's box: hills and ridges shading the land beyond them
+    if (quality > 1) m.receivedShadowNode = Fn(([s]: [THREE.Node<"float">]) => s.mul(far)) as never;
     return m;
   }
 
@@ -171,7 +204,7 @@ export function makeTerrain(
 
 /** Albedo, normal (view space) and roughness of the ground at positionWorld. */
 export function groundShade(
-  tex: { ground0: THREE.Texture; ground1: THREE.Texture },
+  tex: { ground0: THREE.Texture; ground1: THREE.Texture; stones: THREE.Texture },
   detail: THREE.Texture,
   mood: MoodState,
 ) {
@@ -182,35 +215,56 @@ export function groundShade(
   const nx = g1.z.mul(2).sub(1),
     nz = g1.w.mul(2).sub(1);
   const macro = vec3(nx, sqrt(max(float(1).sub(nx.mul(nx)).sub(nz.mul(nz)), 0.01)), nz);
-  const A = texture(detail, wp.xz.div(41)),
-    B = texture(detail, wp.xz.div(9.3)),
-    C = texture(detail, wp.xz.div(2.3));
+  // the shared detail noise at four scales; the two middle ones are fetched twice, the second turned
+  // and shifted, and blended by a slower noise, so no tile ever repeats on the ground
+  const rot = (v: Node2) => vec2(v.x.mul(0.825).sub(v.y.mul(0.565)), v.x.mul(0.565).add(v.y.mul(0.825)));
+  const A = texture(detail, wp.xz.div(41));
+  const s1 = wp.xz.div(9.3),
+    s2 = wp.xz.div(2.3);
+  const B0 = texture(detail, s1),
+    C0 = texture(detail, s2);
+  const B = mix(B0, texture(detail, rot(wp.xz).div(9.3).add(0.37)), smoothstep(0.42, 0.58, A.y));
+  const C = mix(C0, texture(detail, rot(wp.xz).div(2.3).add(0.61)), smoothstep(0.4, 0.6, B.y));
+  // grain and gravel, about 7 cm: fades with its own mips
+  const s3 = rot(rot(wp.xz)).div(0.83);
+  const D = texture(detail, s3);
+  const grain = C.y.mul(0.5).add(0.75).mul(D.y.mul(0.45).add(0.78));
   // steepness: rock shows through
   const steep = smoothstep(0.84, 0.66, macro.y);
   const rockW = max(g1.x, steep);
-  // region albedos (linear): moss and leaf litter, mud, ash and straw, dry grass
-  const forest = mix(
-    mix(vec3(0.035, 0.05, 0.02), vec3(0.06, 0.072, 0.028), B.y),
-    mix(vec3(0.06, 0.047, 0.032), vec3(0.085, 0.066, 0.038), C.y),
-    smoothstep(0.52, 0.72, A.x.add(B.y.mul(0.35))),
-  ).mul(C.x.mul(0.5).add(0.75));
-  const wet = smoothstep(WATER_Y + 1.2, WATER_Y - 0.2, wp.y);
-  const mire = mix(vec3(0.045, 0.043, 0.03), vec3(0.05, 0.062, 0.03), B.y).mul(
-    mix(float(1), float(0.45), wet),
+  const field = fieldTint(wp.xz, g0, detail, false);
+  // region albedos (linear). Gloamwood: moss, and leaf litter speckled brown, rust and old gold
+  const hue = fract(C.y.mul(7.3).add(D.x.mul(2.1)));
+  const litter = mix(
+    mix(vec3(0.065, 0.042, 0.026), vec3(0.12, 0.058, 0.022), smoothstep(0.25, 0.5, hue)),
+    vec3(0.13, 0.1, 0.038),
+    smoothstep(0.62, 0.9, hue),
   );
+  const forest = mix(
+    mix(vec3(0.03, 0.048, 0.017), field.mul(0.8), B.y),
+    litter,
+    smoothstep(0.48, 0.68, A.x.add(B.y.mul(0.35)).add(D.x.sub(0.5).mul(0.2))),
+  ).mul(grain);
+  // the mire: peat and algae, black where it's wet
+  const wet = smoothstep(WATER_Y + 1.2, WATER_Y - 0.2, wp.y);
+  const mire = mix(
+    mix(vec3(0.045, 0.039, 0.027), vec3(0.034, 0.05, 0.021), smoothstep(0.45, 0.65, B.y)),
+    vec3(0.018, 0.02, 0.014),
+    wet,
+  ).mul(grain);
+  // the keep: ash, straw and soot
   const keep = mix(
-    vec3(0.07, 0.065, 0.06),
-    vec3(0.13, 0.105, 0.065),
-    smoothstep(0.5, 0.66, A.x.add(C.y.mul(0.2))),
-  ).mul(C.x.mul(0.5).add(0.75));
-  const high = mix(
-    vec3(0.15, 0.135, 0.07),
-    vec3(0.075, 0.095, 0.04),
-    smoothstep(0.35, 0.7, A.y.add(B.x.mul(0.3))),
-  ).mul(C.x.mul(0.5).add(0.75));
+    mix(vec3(0.07, 0.065, 0.06), vec3(0.13, 0.105, 0.065), smoothstep(0.5, 0.66, A.x.add(C.y.mul(0.2)))),
+    vec3(0.03, 0.028, 0.027),
+    smoothstep(0.62, 0.75, B.w).mul(0.6),
+  ).mul(grain);
+  // the highlands: the meadow's own patches of green, straw and heather, thin soil between
+  const high = mix(field, vec3(0.1, 0.085, 0.06), smoothstep(0.55, 0.8, C.x.add(D.y.mul(0.3)).sub(0.15))).mul(
+    grain,
+  );
   // rock, projected three ways so cliffs aren't smeared: strata run level along the faces
-  const tw = macro.abs().pow(vec3(4)).toVar();
-  tw.divAssign(tw.x.add(tw.y).add(tw.z));
+  const tw0 = macro.abs().pow(vec3(4));
+  const tw = tw0.div(tw0.x.add(tw0.y).add(tw0.z));
   const RX = texture(detail, vec2(wp.y, wp.z).div(13)),
     RZ = texture(detail, vec2(wp.y, wp.x).div(13));
   const RX2 = texture(detail, wp.zy.div(3.1)),
@@ -218,23 +272,68 @@ export function groundShade(
   const rn = RX.x.mul(tw.x).add(RZ.x.mul(tw.z)).add(B.x.mul(tw.y));
   const rs = RX.w.mul(tw.x).add(RZ.w.mul(tw.z)).add(A.w.mul(tw.y));
   const rf = RX2.y.mul(tw.x).add(RZ2.y.mul(tw.z)).add(C.y.mul(tw.y));
-  const strata = smoothstep(0.25, 0.75, rs.add(wp.y.mul(0.11).sin().mul(0.2)));
-  const snow = smoothstep(235, 275, wp.y.add(A.x.mul(40))).mul(smoothstep(0.6, 0.85, macro.y));
+  // strata only on faces: flat rock is scree, not stripes
+  const strata = smoothstep(0.25, 0.75, rs.add(wp.y.mul(0.11).sin().mul(0.2))).mul(
+    smoothstep(0.8, 0.4, tw.y),
+  );
+  // lichen in pale green and rust on the faces that see the sky
+  const rcell = RX2.z.mul(tw.x).add(RZ2.z.mul(tw.z)).add(D.z.mul(tw.y));
+  const lichen = smoothstep(0.55, 0.8, rcell.mul(0.6).add(rf.mul(0.6)).sub(0.1))
+    .mul(smoothstep(-0.2, 0.6, macro.y))
+    .mul(smoothstep(0.45, 0.6, A.y));
+  const snow = smoothstep(225, 265, wp.y.add(A.x.mul(45)).add(B.x.mul(10)))
+    .mul(smoothstep(0.55, 0.8, macro.y.add(B.y.mul(0.15))))
+    .toVar();
   const rock = mix(
-    mix(vec3(0.13, 0.122, 0.11), vec3(0.045, 0.043, 0.042), strata)
-      .mul(rn.mul(1.1).add(0.35))
-      .mul(rf.mul(0.6).add(0.7)),
-    vec3(0.75, 0.78, 0.82),
+    mix(
+      mix(vec3(0.14, 0.13, 0.115), vec3(0.05, 0.047, 0.045), strata)
+        .mul(rn.mul(0.8).add(0.55))
+        .mul(rf.mul(0.6).add(0.7)),
+      mix(vec3(0.15, 0.16, 0.09), vec3(0.2, 0.1, 0.04), smoothstep(0.4, 0.7, A.x)),
+      lichen.mul(0.55),
+    ),
+    vec3(0.62, 0.66, 0.72).mul(C.x.mul(0.2).add(0.85)),
     snow,
   );
-  const road = mix(vec3(0.12, 0.09, 0.06), vec3(0.17, 0.15, 0.12), smoothstep(0.72, 0.92, C.z).mul(0.5)).mul(
-    B.x.mul(0.4).add(0.75),
-  );
+  // packed dirt with gravel and the odd larger stone pressed in
+  const road = mix(
+    vec3(0.11, 0.084, 0.058),
+    vec3(0.165, 0.145, 0.115),
+    smoothstep(0.72, 0.92, C.z).mul(0.6),
+  ).mul(B.x.mul(0.4).add(0.75).mul(grain));
   const sum = max(g0.x.add(g0.y).add(g0.z).add(g0.w), 0.001);
   const regional = forest.mul(g0.x).add(mire.mul(g0.y)).add(keep.mul(g0.z)).add(high.mul(g0.w)).div(sum);
   // height-blend: rock wins where its detail is high, so the edge is ragged, not a smear
   const rk = smoothstep(0.35, 0.65, rockW.add(B.x.sub(0.5).mul(0.5)));
   const rd = smoothstep(0.3, 0.6, g1.y.add(C.y.sub(0.5).mul(0.3)));
+  // loose stones: gravel on the roads, a scatter on dry ground, none in the mire
+  const pebDens = mix(
+    g0.x.mul(0.12).add(g0.z.mul(0.4)).add(g0.w.mul(0.18)).div(sum),
+    float(0.75),
+    rd.max(rk.mul(0.5)),
+  ).mul(float(1).sub(wet));
+  // two sizes of stone from the stone texture, each kept where its own random is under the density,
+  // which drifts with a slow noise so they gather in drifts rather than spread evenly
+  // (stones lie on ground that's near level: on a cliff they'd be smears)
+  const pebArea = pebDens
+    .mul(smoothstep(0.3, 0.7, C.x.mul(0.6).add(B.w.mul(0.4))))
+    .mul(smoothstep(0.78, 0.92, macro.y))
+    .toVar();
+  const t1 = rot(wp.xz).div(1.6),
+    t2 = wp.xz.div(4.3).add(0.5);
+  const S1 = texture(tex.stones, t1),
+    S2 = texture(tex.stones, t2);
+  const k1 = smoothstep(pebArea.add(0.03), pebArea.sub(0.03), S1.y),
+    k2 = smoothstep(pebArea.mul(0.4).add(0.03), pebArea.mul(0.4).sub(0.03), S2.y);
+  const ph = max(S1.x.mul(k1), S2.x.mul(k2).mul(1.4)).toVar();
+  const peb = smoothstep(0.02, 0.25, ph).toVar();
+  const pebble = mix(
+    vec3(0.16, 0.15, 0.135),
+    vec3(0.11, 0.1, 0.09),
+    select(S2.x.mul(k2).greaterThan(S1.x.mul(k1)), S2.z, S1.z),
+  )
+    .mul(ph.mul(0.4).add(0.7))
+    .mul(D.y.mul(0.3).add(0.85));
   // cloud shadows sliding over the land, along the sun
   const cs = texture(
     detail,
@@ -244,18 +343,21 @@ export function groundShade(
       .add(vec2(time.mul(0.0035), time.mul(0.0012))),
   );
   const shade = mix(float(1), float(0.45), smoothstep(0.5, 0.62, cs.x).mul(mood.u.clouds));
-  const albedo = mix(mix(regional, rock, rk), road, rd.mul(float(1).sub(rk.mul(0.7)))).mul(shade);
+  const albedo = mix(
+    mix(mix(regional, rock, rk), road, rd.mul(float(1).sub(rk.mul(0.7)))),
+    pebble,
+    peb.mul(float(1).sub(snow)),
+  ).mul(shade);
   // detail normal: the ground's slope from the top projection, the rock's from the side ones
   const e = 1 / 512;
-  const s1 = wp.xz.div(9.3),
-    s2 = wp.xz.div(2.3);
+  // (gradients of the plain fetches: the blended ones would differ by the blend, not the slope)
   const dB = vec2(
-    texture(detail, s1.add(vec2(e, 0))).x.sub(B.x),
-    texture(detail, s1.add(vec2(0, e))).x.sub(B.x),
+    texture(detail, s1.add(vec2(e, 0))).x.sub(B0.x),
+    texture(detail, s1.add(vec2(0, e))).x.sub(B0.x),
   );
   const dC = vec2(
-    texture(detail, s2.add(vec2(e, 0))).x.sub(C.x),
-    texture(detail, s2.add(vec2(0, e))).x.sub(C.x),
+    texture(detail, s2.add(vec2(e, 0))).x.sub(C0.x),
+    texture(detail, s2.add(vec2(0, e))).x.sub(C0.x),
   );
   const bump = dB.mul(mix(float(6), float(12), rk)).add(dC.mul(mix(float(3), float(7), rk.max(rd))));
   const sx = vec2(wp.y, wp.z).div(13),
@@ -273,9 +375,50 @@ export function groundShade(
     gX.x.negate().mul(tw.x).sub(gZ.x.mul(tw.z)),
     gX.y.negate().mul(tw.x),
   ).mul(rk);
+  // each stone rounded up out of the soil
+  const dD = vec2(
+    texture(tex.stones, t1.add(vec2(e, 0))).x.sub(S1.x),
+    texture(tex.stones, t1.add(vec2(0, e))).x.sub(S1.x),
+  ).mul(k1.mul(14));
   const n = normalize(
-    macro.add(vec3(bump.x.negate(), 0, bump.y.negate()).mul(tw.y.mul(0.7).add(0.3))).add(side),
+    macro
+      .add(vec3(bump.x.add(dD.x).negate(), 0, bump.y.add(dD.y).negate()).mul(tw.y.mul(0.7).add(0.3)))
+      .add(side),
   );
-  const rough = mix(mix(float(0.93), float(0.85), rk), float(0.28), wet.mul(g0.y));
-  return { color: albedo, normal: transformNormalToView(n), rough };
+  const rough = mix(mix(mix(float(0.95), float(0.85), rk), float(0.78), peb), float(0.25), wet.mul(g0.y)).min(
+    mix(float(1), float(0.55), snow),
+  );
+  // soil settles dark in the gaps between stones and under the litter
+  const ao = float(1)
+    .sub(
+      float(1)
+        .sub(smoothstep(0.0, 0.3, ph))
+        .mul(pebArea)
+        .mul(0.5),
+    )
+    .mul(C.y.mul(0.3).add(0.75));
+  return { color: albedo, normal: transformNormalToView(n), rough, ao };
+}
+
+/**
+ * The colour a field takes at `xz`: lush green, straw and heather in drifting patches in the
+ * highlands, gold-green under the oaks. The ground under the grass and the blades both read it, so
+ * the field doesn't change colour where the blades end. `level`: sample mip 0 (vertex stage).
+ */
+export function fieldTint(xz: Node2, g0: Node4, detail: THREE.Texture, level: boolean) {
+  const at = (uv: Node2) => (level ? texture(detail, uv).level(float(0)) : texture(detail, uv));
+  const P = at(xz.div(173).add(0.21)),
+    Q = at(xz.div(37).add(0.63));
+  const dry = smoothstep(0.38, 0.66, P.x.add(Q.y.mul(0.35)).sub(0.12));
+  const heather = smoothstep(0.6, 0.74, P.y.add(Q.x.mul(0.1))).mul(0.55);
+  const high = mix(
+    mix(vec3(0.06, 0.092, 0.028), vec3(0.17, 0.145, 0.062), dry),
+    vec3(0.09, 0.055, 0.07),
+    heather,
+  );
+  const wood = mix(vec3(0.04, 0.072, 0.02), vec3(0.11, 0.1, 0.03), dry.mul(0.7));
+  const mire = mix(vec3(0.05, 0.062, 0.03), vec3(0.085, 0.078, 0.04), dry);
+  const keep = mix(vec3(0.085, 0.078, 0.05), vec3(0.15, 0.12, 0.06), dry);
+  const sum = max(g0.x.add(g0.y).add(g0.z).add(g0.w), 0.001);
+  return wood.mul(g0.x).add(mire.mul(g0.y)).add(keep.mul(g0.z)).add(high.mul(g0.w)).div(sum);
 }

@@ -74,8 +74,21 @@ export class Land {
       if (w[i] < 0.002) continue;
       h += w[i] * this.regionHeight(i, x, z);
     }
-    if (edge > 0) h = lerp(h, 150 + 250 * n.ridged(x / 240, z / 240, 5), edge);
+    if (edge > 0) h = lerp(h, this.range(x, z), edge);
     return h + 0.4 * n.n2(x / 7.3, z / 7.3);
+  }
+
+  /**
+   * The mountains that wall the world: a few massifs, not a fence of spikes. A slow noise says which
+   * stretches of the ring stand high; warped ridges run down from them into spurs and valleys.
+   */
+  range(x: number, z: number) {
+    const n = this.noise;
+    const wx = x + 130 * n.fbm(x / 320 + 3, z / 320, 3),
+      wz = z + 130 * n.fbm(x / 320, z / 320 - 5, 3);
+    const massif = 0.5 + 0.5 * n.fbm(x / 650 - 9, z / 650 + 4, 3);
+    const ridge = n.ridged(wx / 380, wz / 380, 6);
+    return 105 + 360 * massif * (0.3 + 0.7 * ridge) + 30 * n.fbm(x / 80, z / 80, 3);
   }
 
   regionHeight(i: number, x: number, z: number) {

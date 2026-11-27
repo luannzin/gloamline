@@ -33,12 +33,12 @@ import {
 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import type { MoodState } from "./mood";
+import { fieldTint } from "./terrain";
 
-const BLADES = 6,
-  ROWS = 5;
+const ROWS = 5;
 
-/** One clump: BLADES strips of ROWS rows. Attributes: blade index, row (0 root .. 1 tip), side (-1, 1). */
-function clump() {
+/** One clump: `BLADES` strips of ROWS rows. Attributes: blade index, row (0 root .. 1 tip), side (-1, 1). */
+function clump(BLADES: number) {
   const blade: number[] = [],
     row: number[] = [],
     side: number[] = [],
@@ -78,11 +78,12 @@ function clump() {
 
 export function makeGrass(
   tex: { height: THREE.DataTexture; ground0: THREE.Texture; ground1: THREE.Texture },
+  detail: THREE.Texture,
   mood: MoodState,
   quality: number,
 ) {
-  const side = quality > 1 ? 200 : 140,
-    step = quality > 1 ? 0.3 : 0.38;
+  const side = [0, 140, 200, 270][quality],
+    step = [0, 0.38, 0.3, 0.28][quality];
   const reach = side * step * 0.5;
   const origin = uniform(new THREE.Vector2());
   const m = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide });
@@ -111,7 +112,7 @@ export function makeGrass(
   const nx = g1.z.mul(2).sub(1),
     nz = g1.w.mul(2).sub(1),
     ny = max(float(1).sub(nx.mul(nx)).sub(nz.mul(nz)), 0.05).sqrt();
-  const tall = g0.x.mul(0.6).add(g0.y.mul(0.85)).add(g0.z.mul(0.6)).add(g0.w.mul(1.05));
+  const tall = g0.x.mul(0.55).add(g0.y.mul(0.85)).add(g0.z.mul(0.6)).add(g0.w.mul(0.78));
   const allowed = float(1)
     .sub(g1.x)
     .mul(float(1).sub(smoothstep(0.12, 0.45, g1.y)))
@@ -151,7 +152,15 @@ export function makeGrass(
         .div(ny),
     )
     .sub(0.04);
-  const len = tall.mul(mix(float(0.55), float(1.15), r3)).mul(shown);
+  // a few clumps flower: one stem each, a head at its tip (more in the highlands' meadows)
+  const flowerP = g0.w.mul(0.09).add(g0.x.mul(0.035)).add(g0.z.mul(0.02));
+  const flower = c2.greaterThan(float(1).sub(flowerP)).and(bi.lessThan(0.5)).select(float(1), float(0));
+  const patchLen = texture(detail, vec2(cx, cz).div(23)).level(float(0)).x.mul(0.9).add(0.55);
+  const len = tall
+    .mul(mix(float(0.5), float(1.15), r3))
+    .mul(patchLen)
+    .mul(flower.mul(0.35).add(1))
+    .mul(shown);
   const az = r2.mul(6.2832).add(r1.mul(2));
   const tilt = r3.mul(0.35).add(0.08);
   const d = vec3(sin(tilt).mul(cos(az)), cos(tilt), sin(tilt).mul(sin(az)));
@@ -178,7 +187,7 @@ export function makeGrass(
           .add(0.4),
       ),
     );
-  const ka = max(k, 0.06),
+  const ka = max(k.mul(flower.mul(-0.6).add(1)), 0.06),
     sK = sin(ka.mul(v)),
     cK = cos(ka.mul(v));
   const centre = vec3(bx, by, bz).add(
@@ -188,11 +197,15 @@ export function makeGrass(
       .mul(len),
   );
   const N = normalize(pe.mul(cK).sub(d.mul(sK)));
-  // width: tapered, wider with distance so a blade never falls under a pixel
-  const width = mix(float(0.022), float(0.04), r2)
-    .max(dist.mul(0.0016))
-    .mul(float(1).sub(v).pow(0.75))
-    .mul(shown);
+  // width: tapered, wider with distance so a blade never falls under a pixel; a flower's stem is
+  // thin and swells into a head at the tip
+  const taper = float(1).sub(v).pow(0.75);
+  const head = smoothstep(0.78, 0.9, v).mul(float(1).sub(smoothstep(0.97, 1.0, v)));
+  const width = mix(
+    mix(float(0.014), float(0.028), r2).max(dist.mul(0.0014)).mul(taper),
+    float(0.008).add(head.mul(0.05)).max(dist.mul(0.0012)),
+    flower,
+  ).mul(shown);
   const tw = r1.sub(0.5).mul(1.4).mul(v);
   const S = sd.mul(cos(tw)).add(N.mul(sin(tw)));
   const sway = vec2(sin(time.mul(0.9).add(ph).add(r2)), cos(time.mul(0.7).add(ph.mul(1.3))))
@@ -218,20 +231,27 @@ export function makeGrass(
   // --- colour: per region, darker at the root (the clump shades itself), lighter and drier at the tip
   const seed = varying(r3),
     vv = varying(v);
-  const tint = vec3(0.08, 0.13, 0.03)
-    .mul(g0.x)
-    .add(vec3(0.065, 0.08, 0.032).mul(g0.y))
-    .add(vec3(0.14, 0.11, 0.055).mul(g0.z))
-    .add(vec3(0.17, 0.165, 0.07).mul(g0.w));
+  // the field's own colour (shared with the ground under it), a little brighter in the blades
+  const tint = fieldTint(vec2(cx, cz), g0, detail, true).mul(1.3);
   const dry = vec3(0.22, 0.18, 0.08);
   const tintV = varying(tint);
+  // flower heads: white, butter yellow, violet, a few red
+  const fh = hash(c2.mul(31.7));
+  const petal = mix(
+    mix(vec3(0.75, 0.72, 0.62), vec3(0.8, 0.55, 0.06), smoothstep(0.3, 0.35, fh)),
+    mix(vec3(0.3, 0.16, 0.55), vec3(0.62, 0.06, 0.04), smoothstep(0.85, 0.9, fh)),
+    smoothstep(0.6, 0.65, fh),
+  );
+  const petalV = varying(petal),
+    headV = varying(head.mul(flower));
   const albedo = Fn(() => {
-    const base = mix(tintV, dry, seed.mul(seed).mul(0.55)).toVar();
-    base.mulAssign(mix(float(0.55), float(1.25), vv.pow(0.7)));
-    return base.mul(mix(float(0.85), float(1.1), seed));
+    const base = mix(tintV, dry, seed.mul(seed).mul(0.5)).toVar();
+    base.mulAssign(mix(float(0.45), float(1.25), vv.pow(0.7)));
+    return mix(base.mul(mix(float(0.85), float(1.1), seed)), petalV, headV);
   })();
   m.colorNode = albedo;
-  m.roughnessNode = float(0.55);
+  // matte: a sky-blue sheen on every blade reads as plastic
+  m.roughnessNode = float(0.82);
   // light through the blades toward the sun
   const view = normalize(positionWorld.sub(cameraPosition));
   const back = pow(max(dot(view, mood.u.sunDir), 0), 3)
@@ -239,7 +259,7 @@ export function makeGrass(
     .add(0.08);
   m.emissiveNode = albedo.mul(mood.u.sunColor).mul(back.mul(mood.u.sunPower).mul(0.18)).mul(vv);
 
-  const mesh = new THREE.Mesh(clump(), m);
+  const mesh = new THREE.Mesh(clump(quality > 2 ? 9 : 7), m);
   mesh.count = side * side;
   mesh.frustumCulled = false;
   mesh.receiveShadow = true;

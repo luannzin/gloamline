@@ -4,6 +4,8 @@ import { useSyncExternalStore } from "react";
 
 export type Phase = "loading" | "menu" | "playing";
 export type Person = { id: string; name: string; seed: number; you?: boolean };
+/** Someone on the map: map position (0..1, north up) and heading (radians, clockwise from north). */
+export type Mark = Person & { u: number; v: number; heading: number };
 
 export type UIState = {
   phase: Phase;
@@ -17,6 +19,11 @@ export type UIState = {
   full: boolean;
   stats: string | null;
   error: string | null;
+  /** the map (a data URL, drawn once from the world), whether it's open, and who's where */
+  mapImage: string | null;
+  mapLabels: { name: string; u: number; v: number }[];
+  mapOpen: boolean;
+  marks: Mark[];
 };
 
 let state: UIState = {
@@ -30,6 +37,10 @@ let state: UIState = {
   full: false,
   stats: null,
   error: null,
+  mapImage: null,
+  mapLabels: [],
+  mapOpen: false,
+  marks: [],
 };
 const listeners = new Set<() => void>();
 
