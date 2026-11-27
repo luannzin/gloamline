@@ -49,7 +49,8 @@ export async function openLobby(
   const room = joinRoom({ appId: APP_ID, password: secret }, await roomName(secret));
   const people = new Map<string, Remote>();
   const hello = room.makeAction<Profile>("hello");
-  const pose = room.makeAction<ArrayBuffer>("pose");
+  // binary payloads arrive as a Uint8Array (trystero 0.27), never as an ArrayBuffer
+  const pose = room.makeAction<Uint8Array>("pose");
 
   room.onPeerJoin(({ peerId }) => void hello.send(me, { target: peerId }));
   room.onPeerLeave(({ peerId }) => {
@@ -68,14 +69,16 @@ export async function openLobby(
   });
   pose.onMessage((buf, { peerId }) => {
     const r = people.get(peerId);
-    if (!r || !(buf instanceof ArrayBuffer) || buf.byteLength !== 20) return;
-    const f = new Float32Array(buf);
+    if (!r || !(buf instanceof Uint8Array) || buf.byteLength !== 20) return;
+    // copied: the view may sit at an offset a Float32Array can't start on
+    const f = new Float32Array(buf.slice().buffer);
     if (!f.every(Number.isFinite)) return;
     r.poses.push([performance.now(), f[0], f[1], f[2], f[3], f[4]]);
     if (r.poses.length > 8) r.poses.shift();
   });
 
-  const out = new Float32Array(5);
+  const out = new Float32Array(5),
+    outBytes = new Uint8Array(out.buffer);
   return {
     people,
     /** Sends this player's pose. */
@@ -86,7 +89,7 @@ export async function openLobby(
       out[2] = z;
       out[3] = yaw;
       out[4] = lantern ? 1 : 0;
-      void pose.send(out.slice().buffer);
+      void pose.send(outBytes.slice());
     },
     rename(p: Profile) {
       me = p;
