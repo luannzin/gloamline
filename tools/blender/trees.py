@@ -78,7 +78,7 @@ def radii_of(nodes, parents, tip=0.022, flare=1.25):
     r[0] *= flare
     if n > 1:
         r[1] *= (1 + flare) / 2
-    return r, kids
+    return r
 
 
 def bark(name, nodes, parents, r, min_r, subdiv, ratio, seed):
@@ -163,7 +163,7 @@ def oak(seed):
     radii = Vector((5.2 + rng.random() * 1.6, 5.2 + rng.random() * 1.6, 3.6 + rng.random() * 1.2))
     center = Vector((lean.x * 6, lean.y * 6, H + radii.z * 0.85))
     nodes, parents = grow(rng, H, lean, center, radii, 1400)
-    r, kids = radii_of(nodes, parents)
+    r = radii_of(nodes, parents)
     bark(f"oak{seed}_bark_lod0", nodes, parents, r, 0.045, 1, 0.18, seed)
     bark(f"oak{seed}_bark_lod1", nodes, parents, r, 0.07, 0, 0.35, seed)
     twigs = [i for i in range(len(nodes)) if r[i] < 0.05 and nodes[i].z > H * 0.8]
@@ -199,7 +199,7 @@ def dead(seed):
     radii = Vector((3.2 + rng.random(), 3.2 + rng.random(), 3 + rng.random()))
     center = Vector((lean.x * 5, lean.y * 5, H + radii.z * 0.9))
     nodes, parents = grow(rng, H, lean, center, radii, 260, step=0.4, influence=2.8, kill=1.1)
-    r, _ = radii_of(nodes, parents, tip=0.03, flare=1.4)
+    r = radii_of(nodes, parents, tip=0.03, flare=1.4)
     bark(f"dead{seed}_bark_lod0", nodes, parents, r, 0.032, 1, 0.35, seed)
     bark(f"dead{seed}_bark_lod1", nodes, parents, r, 0.055, 0, 0.4, seed)
 

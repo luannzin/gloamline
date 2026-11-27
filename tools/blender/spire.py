@@ -51,7 +51,7 @@ for k, (z0, h, r) in enumerate(tiers):
     for f in faces:
         f.normal_update()
     side = [f for f in faces if abs(f.normal.z) < 0.5]
-    win = bmesh.ops.inset_individual(bm, faces=side, thickness=r * 0.28, depth=0)
+    bmesh.ops.inset_individual(bm, faces=side, thickness=r * 0.28, depth=0)
     for f in side:
         # keep the window tall and narrow: pull its top and bottom in toward the middle
         c = f.calc_center_median()

@@ -12,7 +12,7 @@ import sys
 
 import bmesh
 import bpy
-from mathutils import Matrix, Vector, noise
+from mathutils import Vector, noise
 
 out = sys.argv[sys.argv.index("--") + 1]
 bpy.ops.wm.read_factory_settings(use_empty=True)

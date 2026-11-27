@@ -11,7 +11,7 @@ import sys
 
 import bmesh
 import bpy
-from mathutils import Vector, noise
+from mathutils import Matrix, Vector, noise
 
 out = sys.argv[sys.argv.index("--") + 1]
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -109,7 +109,7 @@ def banner(name, cols, rows):
                 loop[uv].uv = p[1]
     # the crossbar and the pole above it
     bar = bmesh.ops.create_cone(bm, cap_ends=True, segments=6, radius1=0.035, radius2=0.035, depth=W + 0.2)
-    bmesh.ops.rotate(bm, verts=bar["verts"], cent=(0, 0, 0), matrix=__import__("mathutils").Matrix.Rotation(math.pi / 2, 3, "Y"))
+    bmesh.ops.rotate(bm, verts=bar["verts"], cent=(0, 0, 0), matrix=Matrix.Rotation(math.pi / 2, 3, "Y"))
     pole = bmesh.ops.create_cone(bm, cap_ends=True, segments=6, radius1=0.04, radius2=0.03, depth=2.0)
     bmesh.ops.translate(bm, verts=pole["verts"], vec=(0, 0, 0.9))
     for v in bar["verts"] + pole["verts"]:
