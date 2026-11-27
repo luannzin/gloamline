@@ -214,36 +214,6 @@ export function pine(seed: number, far: boolean) {
   return { bark: B.geometry(), leaves: L.geometry() };
 }
 
-export function fern(seed: number) {
-  const r = rng(seed),
-    L = new Builder();
-  const k = 7 + Math.floor(r() * 4);
-  for (let i = 0; i < k; i++) {
-    const a = (i / k) * Math.PI * 2 + r() * 0.4,
-      dx = Math.cos(a),
-      dz = Math.sin(a),
-      len = 0.9 + r() * 0.5;
-    // two cards per frond, bent: rising, then arching out
-    const n = [dx * 0.4, 0.9, dz * 0.4];
-    for (let s = 0; s < 2; s++) {
-      const t0 = s * 0.5,
-        b = L.p.length / 3;
-      const pt = (t: number) => [dx * len * t, Math.sin(t * Math.PI * 0.75) * len * 0.55, dz * len * t];
-      const w = 0.42 * len;
-      for (const [t, vv] of [
-        [t0, s * 0.5],
-        [t0 + 0.5, s * 0.5 + 0.5],
-      ]) {
-        const p = pt(t);
-        L.vert(p[0] - dz * w, p[1], p[2] + dx * w, n[0], n[1], n[2], 0, vv * 0.5, t);
-        L.vert(p[0] + dz * w, p[1], p[2] - dx * w, n[0], n[1], n[2], 0.5, vv * 0.5, t);
-      }
-      L.idx.push(b, b + 1, b + 3, b, b + 3, b + 2);
-    }
-  }
-  return L.geometry();
-}
-
 export function reeds(seed: number) {
   const r = rng(seed),
     L = new Builder();

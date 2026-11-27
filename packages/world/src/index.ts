@@ -20,6 +20,7 @@ import {
   SIZE,
   sampleRoads,
 } from "./terrain";
+import { buildVillage } from "./village";
 
 export * from "./cave";
 export * from "./erosion";
@@ -27,6 +28,7 @@ export * from "./noise";
 export * from "./ruins";
 export * from "./scatter";
 export * from "./terrain";
+export * from "./village";
 
 export const SEED = 20261127;
 
@@ -79,13 +81,32 @@ export function finishWorld(
   groundNormals(ground);
   log("Hollowing the mountain…");
   const cave = surfaceNets(field);
-  log("Raising the keep…");
+  log("Raising the ostrog…");
   const { blocks: ruins, towers } = buildRuins(ground.height, land.noise, seed);
+  log("Building Zarechye…");
+  const village = buildVillage(ground.height, roads[0], seed);
   log("Growing the woods…");
-  const props = scatter(ground, index, field, land.noise, seed);
+  const props = scatter(ground, index, field, land.noise, seed, village.clear);
   const s = roads[0].pts;
   const spawn = [s[6], heightAt(ground.height, s[6], s[7]), s[7]];
-  return { seed, ground, wear, roads: roads.map((r) => r.pts), field, cave, ruins, towers, props, spawn };
+  // what bodies collide with: the ruins' solid stones and the village's walls, in one block list
+  const solid = new Float32Array(ruins.length + village.blocks.length);
+  solid.set(ruins);
+  solid.set(village.blocks, ruins.length);
+  return {
+    seed,
+    ground,
+    wear,
+    roads: roads.map((r) => r.pts),
+    field,
+    cave,
+    ruins,
+    towers,
+    village,
+    solid,
+    props,
+    spawn,
+  };
 }
 
 export function buildWorld(seed = SEED, log: (stage: string, ms: number) => void = () => {}) {

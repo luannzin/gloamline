@@ -1,6 +1,7 @@
 # Gloamline: where to look
 
-A souls-like world at dusk for up to eight players in the browser. Bun workspaces, TypeScript,
+Co-op survival in a Soviet backwater the winter after the flash, for up to eight players in the
+browser. Bun workspaces, TypeScript,
 Three.js r187 (WebGPU, TSL), React + coss ui for the interface, Trystero for the lobby.
 
 | Question | File |
@@ -8,7 +9,7 @@ Three.js r187 (WebGPU, TSL), React + coss ui for the interface, Trystero for the
 | What is the world made of, and where? | `packages/world/src` (pure functions of the seed; no DOM, no Three.js) |
 | How does a frame get drawn? | `apps/client/src/gfx/*` (one file per system), `apps/client/src/main.ts` (wiring and loop) |
 | What does each region look like? | `apps/client/src/gfx/mood.ts` (`MOODS`) |
-| How does it look and read? | `DESIGN.md` |
+| How does it look and read? | `DESIGN.md` (and `docs/REFERENCES.md` for the board behind it) |
 | What's planned, and why this stack? | `docs/PLAN.md` |
 | How do players meet? | `apps/client/src/net.ts` |
 | What does the map (`Tab`) show? | `apps/client/src/map.ts` (drawn once from the world), `ui/app.tsx` (`WorldMap`) |
@@ -22,9 +23,10 @@ Three.js r187 (WebGPU, TSL), React + coss ui for the interface, Trystero for the
   world package knows about neither. The interface meets the game only in `apps/client/src/ui/store.ts`.
 - **Zero per-frame allocations in the hot loop.** Preallocate; reuse vectors.
 - **Everything is generated.** Textures in `gfx/textures.ts`; small geometry in `gfx/shapes.ts`; trees,
-  rocks, the Spire, roofs, banners and the wanderer by the Blender scripts in `tools/blender` (headless,
-  `-t 4`, outputs committed to `apps/client/public/models`, loaded by `gfx/models.ts`). Edit the
-  generator and rerun it, never the output.
+  rocks, the ostrog's roofs and banners, the village (`village.py`) and the survivor (`survivor.py`) by
+  the Blender scripts in `tools/blender` (headless, `-t 4`, outputs committed to
+  `apps/client/public/models`, loaded by `gfx/models.ts`). Edit the generator and rerun it, never the
+  output. The Column is a shader (`gfx/column.ts`), the trails a stamped texture (`gfx/trails.ts`).
 - **coss components are copied, not edited** (`apps/client/src/components/ui`). The critters and the
   palette are copied from Sightline (`src/lib/avatar.ts`, `palette.ts`); a change there needs copying here.
 - **Checks**: `bun run check` (world contracts, prints `ok`), `bun run typecheck`, `bun run lint`.

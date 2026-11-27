@@ -2,20 +2,24 @@
 // doing, then runs blurred behind the menu so shaders compile and resolution settles before anyone
 // walks in (DESIGN.md: the world is the menu).
 import "./style.css";
-import { HOLLOW, Land, NREG, REGIONS, SPIRE } from "@gloamline/world";
+import { COLUMN, HALF, HOLLOW, Land, NREG, REGIONS, SIZE } from "@gloamline/world";
 import * as THREE from "three/webgpu";
 import { randomSeed } from "@/lib/avatar";
+import { makeBody } from "./body";
 import { buildWorld } from "./build";
+import { makeColumn } from "./gfx/column";
 import { makeFlora } from "./gfx/flora";
 import { makeGrass } from "./gfx/grass";
 import { loadModels } from "./gfx/models";
 import { makeMood } from "./gfx/mood";
 import { makeParticles } from "./gfx/particles";
 import { makePost, type Quality } from "./gfx/post";
-import { makeCave, makeRuins, makeSpire } from "./gfx/stone";
+import { makeCave, makeRuins } from "./gfx/stone";
 import { makeTerrain } from "./gfx/terrain";
 import { detailTexture, foliageAtlas, groundTextures } from "./gfx/textures";
 import { makeTowers } from "./gfx/towers";
+import { makeTrails } from "./gfx/trails";
+import { makeVillage } from "./gfx/village";
 import { makeWanderers } from "./gfx/wanderers";
 import { makeWater } from "./gfx/water";
 import { drawMap, toMap } from "./map";
@@ -77,7 +81,7 @@ async function boot() {
   requestAnimationFrame(probe);
   const [world, models] = await Promise.all([
     buildWorld(say),
-    loadModels(["rocks.glb", "trees.glb", "architecture.glb", "wanderer.glb", "spire.glb"]),
+    loadModels(["rocks.glb", "trees.glb", "architecture.glb", "survivor.glb", "village.glb"]),
   ]);
   const refresh = intervals.length > 20 ? intervals.sort((a, b) => a - b)[intervals.length >> 1] : 1000 / 60;
   say("Lighting the world…", 0.85);
@@ -89,8 +93,12 @@ async function boot() {
   };
   ui.set({
     mapImage: drawMap(world),
-    mapLabels: [...REGIONS.map((r) => label(r.name, r.x, r.z)), label("Pale Spire", SPIRE.x, SPIRE.z + 40)],
+    mapLabels: [...REGIONS.map((r) => label(r.name, r.x, r.z)), label("The Column", COLUMN.x, COLUMN.z + 40)],
   });
+  {
+    const [u, v] = toMap(COLUMN.x, COLUMN.z);
+    Object.assign(ui.live.goal, { u, v });
+  }
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 3200);
   const tex = groundTextures(world);
@@ -109,9 +117,10 @@ async function boot() {
     }
     scene.environmentIntensity = mood.envIntensity;
   };
-  const terrain = makeTerrain(tex, detail, mood, q);
+  const trails = makeTrails();
+  const terrain = makeTerrain(tex, detail, mood, q, trails);
   const flora = makeFlora(world, { ground0: tex.ground0, detail, atlas }, mood, q, models);
-  const grass = q > 0 ? makeGrass(tex, detail, mood, q) : null;
+  const grass = q > 0 ? makeGrass(tex, detail, mood, q, trails) : null;
   const particles = makeParticles(tex.height, mood, q);
   const wanderers = makeWanderers(camera, document.getElementById("tags")!, models);
   scene.add(
@@ -120,8 +129,9 @@ async function boot() {
     particles.group,
     makeRuins(world, detail),
     makeCave(world, detail),
-    makeSpire(world, detail, mood, models),
+    makeColumn(world, detail, mood),
     makeTowers(world, models, detail),
+    makeVillage(world, models, detail, mood),
     makeWater(tex.height, detail, mood, q),
     wanderers.group,
   );
@@ -132,7 +142,27 @@ async function boot() {
   scene.add(lantern);
   let lanternOn = false;
 
-  const player = makePlayer(world, camera, canvas);
+  // how deep the snow is under (x, z), 0..1: the mood's snow on ground that's near level, none on
+  // the roads (trodden) or under the mine's rock. The shader's patches aren't counted: close enough.
+  const G1 = world.ground.ground1;
+  function snowDepth(x: number, z: number) {
+    const i = Math.min(SIZE - 1, Math.max(0, Math.round(x + HALF))),
+      j = Math.min(SIZE - 1, Math.max(0, Math.round(z + HALF))),
+      o = (j * SIZE + i) * 4;
+    const nx = G1[o + 2] / 127.5 - 1,
+      nz = G1[o + 3] / 127.5 - 1;
+    const ny = Math.sqrt(Math.max(0, 1 - nx * nx - nz * nz));
+    const flat = Math.min(1, Math.max(0, (ny - 0.75) / 0.17));
+    return mood.u.snow.value * mood.u.open.value * flat * (1 - G1[o + 1] / 255);
+  }
+  const body = makeBody();
+  const player = makePlayer(
+    world,
+    camera,
+    canvas,
+    () => body.canRun,
+    () => snowDepth(player.pos.x, player.pos.z),
+  );
   const post = makePost(renderer, scene, camera, mood, q);
   post.target = Math.max(1000 / 240, refresh);
 
@@ -153,7 +183,9 @@ async function boot() {
       camera.position.y - 0.35,
       camera.position.z - Math.cos(player.yaw) * 0.4,
     );
-    lantern.intensity += ((lanternOn ? 9 : 0) - lantern.intensity) * Math.min(1, dt * 6);
+    // (over the shoulder, the lantern in the body's hand lights the way instead: wanderers.ts)
+    lantern.intensity +=
+      ((lanternOn ? 9 * (1 - player.behind) : 0) - lantern.intensity) * Math.min(1, dt * 6);
   };
   tick(0, false);
   await renderer.compileAsync(scene, camera);
@@ -165,9 +197,22 @@ async function boot() {
   };
   localStorage.setItem("seed", String(me.seed));
   let lobby: Lobby | null = null;
+  // who was here last time, to say in the feed who came and who went
+  let known = new Map<string, string>();
   const party = () => {
     const list: Person[] = [{ id: "me", name: me.name, seed: me.seed, you: true }];
-    for (const r of lobby?.people.values() ?? []) list.push({ id: r.id, name: r.name, seed: r.seed });
+    const now = new Map<string, string>();
+    for (const r of lobby?.people.values() ?? []) {
+      list.push({ id: r.id, name: r.name, seed: r.seed });
+      now.set(r.id, r.name || "A survivor");
+      if (!known.has(r.id)) ui.note(`${r.name || "A survivor"} found you`, "warm");
+    }
+    for (const [id, name] of known)
+      if (!now.has(id)) {
+        ui.note(`${name} is gone`, "cold");
+        trails.forget(id);
+      }
+    known = now;
     ui.set({ party: list });
   };
   async function join(secret: string) {
@@ -218,7 +263,10 @@ async function boot() {
       player.teleport(p[0], p[1], p[2], p[3], p[4], p[5]);
     }
     if (e.code === "KeyH") showStats = !showStats;
-    if (e.code === "KeyF" && playing) lanternOn = !lanternOn;
+    if (e.code === "KeyF" && playing) {
+      lanternOn = !lanternOn;
+      ui.note(lanternOn ? "Lantern lit" : "Lantern out", lanternOn ? "warm" : undefined);
+    }
     if (e.code === "Tab") {
       // Tab would walk the focus through the page: here it opens the map
       e.preventDefault();
@@ -246,22 +294,62 @@ async function boot() {
     if (edge > 0.6) best = 4;
     if (w[best] > 0.62 && best !== area) {
       area = best;
-      ui.set({ area: { name: REGIONS[best].name, key: ++areaKey } });
+      ui.set({ area: { name: REGIONS[best].name, ru: REGIONS[best].ru, key: ++areaKey } });
     }
   }
 
-  // --- the map's marks: you and everyone in the lobby, ten times a second while it's open ---
+  // --- the HUD's live channel: you every frame, everyone else ten times a second ---
   const pose = new Float32Array(5);
-  function marks() {
-    const [u, v] = toMap(player.pos.x, player.pos.z);
-    const list: Mark[] = [{ id: "me", name: me.name, seed: me.seed, you: true, u, v, heading: -player.yaw }];
+  function others() {
+    const list: Mark[] = [];
     const t = performance.now() - 100;
     for (const r of lobby?.people.values() ?? []) {
       if (!poseAt(r, t, pose)) continue;
       const [ru, rv] = toMap(pose[0], pose[2]);
       list.push({ id: r.id, name: r.name, seed: r.seed, u: ru, v: rv, heading: -pose[3] });
     }
-    ui.set({ marks: list });
+    ui.live.others = list;
+  }
+  function live() {
+    const m = ui.live.me;
+    m.u = (player.pos.x + HALF) / SIZE;
+    m.v = (player.pos.z + HALF) / SIZE;
+    m.heading = -player.yaw;
+    ui.live.goal.dist = Math.hypot(player.pos.x - COLUMN.x, player.pos.z - COLUMN.z);
+  }
+
+  // --- the body: the cold, the bad water, the lantern; when it gives out, you come to at the road ---
+  const shown = { ...body.v };
+  let vitalsT = 0;
+  function vitals(dt: number) {
+    const down = body.update(dt, {
+      running: player.running,
+      deep: snowDepth(player.pos.x, player.pos.z),
+      open: mood.u.open.value,
+      cold: mood.u.snowfall.value,
+      lantern: lanternOn,
+      bad: mood.u.fireflies.value,
+    });
+    if (down) {
+      body.reset();
+      player.teleport(world.spawn[0], world.spawn[2], v[2], v[3], v[4]);
+      ui.note("You came to by the road", "cold");
+    }
+    const b = body.v;
+    // the HUD hears about it at most ten times a second, and only when something moved
+    vitalsT += dt;
+    if (vitalsT < 0.1) return;
+    vitalsT = 0;
+    if (
+      Math.abs(b.health - shown.health) +
+        Math.abs(b.stamina - shown.stamina) +
+        Math.abs(b.warmth - shown.warmth) +
+        Math.abs(b.rad - shown.rad) >
+      0.004
+    ) {
+      Object.assign(shown, b);
+      ui.set({ vitals: { ...b } });
+    }
   }
 
   let last = performance.now(),
@@ -275,11 +363,33 @@ async function boot() {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     tick(dt, playing);
-    if (playing) areaCheck();
+    if (playing) {
+      areaCheck();
+      vitals(dt);
+    }
+    // everyone's feet in the snow (trails.ts), remote ones where they're drawn: 100 ms ago
+    if (player.grounded)
+      trails.walk("me", player.pos.x, player.pos.z, -player.yaw, snowDepth(player.pos.x, player.pos.z));
+    if (lobby) {
+      const t = performance.now() - 100;
+      for (const r of lobby.people.values())
+        if (poseAt(r, t, pose)) trails.walk(r.id, pose[0], pose[2], -pose[3], snowDepth(pose[0], pose[2]));
+    }
+    trails.update(dt, camera.position.x, camera.position.z, mood.u.snowfall.value);
+    wanderers.self(
+      me.seed,
+      player.pos.x,
+      player.pos.y,
+      player.pos.z,
+      player.yaw,
+      lanternOn,
+      player.behind > 0.3,
+    );
+    live();
     marksT += dt;
-    if (marksT > 0.1 && ui.get().mapOpen) {
+    if (marksT > 0.1) {
       marksT = 0;
-      marks();
+      others();
     }
     if (lobby) {
       wanderers.update(lobby.people);
@@ -305,7 +415,9 @@ async function boot() {
   });
   // a handle for poking at the running game from the dev tools (fixed poses, timings)
   if (import.meta.env.DEV)
-    Object.assign(window, { __game: { player, camera, mood, VIEWS, scene, post, renderer, wanderers } });
+    Object.assign(window, {
+      __game: { player, camera, mood, VIEWS, scene, post, renderer, wanderers, body, ui, trails },
+    });
 }
 
 boot().catch((e) => {

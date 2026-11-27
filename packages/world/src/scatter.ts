@@ -103,7 +103,15 @@ const RULES: Record<Kind, Rule> = {
   },
 };
 
-export function scatter(g: Ground, roads: RoadIndex, field: Float32Array, noise: Noise, seed: number) {
+/** `clear`: circles (x, z, radius) where nothing taller than a fern may stand: the village's plots. */
+export function scatter(
+  g: Ground,
+  roads: RoadIndex,
+  field: Float32Array,
+  noise: Noise,
+  seed: number,
+  clear: Float32Array = new Float32Array(0),
+) {
   const out = {} as Record<Kind, Float32Array>;
   const w = new Float32Array(5),
     rd = new Float32Array(2);
@@ -165,8 +173,12 @@ export function scatter(g: Ground, roads: RoadIndex, field: Float32Array, noise:
   function fill(x: number, z: number, kind: Kind) {
     if (Math.abs(x) > HALF - 8 || Math.abs(z) > HALF - 8) return false;
     // the ruins out in the land stand in their own clearing (ferns, reeds and mushrooms may stay)
-    if (kind !== "fern" && kind !== "reed" && kind !== "shroom")
+    if (kind !== "fern" && kind !== "reed" && kind !== "shroom") {
       for (const [sx, sz, sr] of RUIN_SITES) if (Math.hypot(x - sx, z - sz) < sr + 6) return false;
+      for (let c = 0; c < clear.length; c += 3)
+        if (Math.hypot(x - clear[c], z - clear[c + 1]) < clear[c + 2] + (kind === "oak" ? 5 : 2))
+          return false;
+    }
     const i = clamp(Math.round(x + HALF), 0, SIZE - 1),
       j = clamp(Math.round(z + HALF), 0, SIZE - 1),
       o = (j * SIZE + i) * 4;

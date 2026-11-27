@@ -15,6 +15,7 @@ import {
   instancedBufferAttribute,
   mix,
   normalLocal,
+  positionGeometry,
   positionLocal,
   positionWorld,
   sin,
@@ -32,7 +33,7 @@ import { type Models, model } from "./models";
 type V4 = ReturnType<typeof vec3> & { w: ReturnType<typeof float> };
 
 /** One instanced mesh: position + yaw in one vec4, scale in another. */
-function placedMesh(
+export function placedMesh(
   geo: THREE.BufferGeometry,
   rows: number[][],
   make: (A: V4, S: V4) => THREE.MeshStandardNodeMaterial,
@@ -53,7 +54,8 @@ function placedMesh(
   return mesh;
 }
 
-function turn(v: ReturnType<typeof vec3>, yaw: ReturnType<typeof float>) {
+/** `v` turned by `yaw` about y, the way every placed mesh is (local +z goes to (sin, cos)). */
+export function turn(v: ReturnType<typeof vec3>, yaw: ReturnType<typeof float>) {
   const c = cos(yaw),
     s = sin(yaw);
   return vec3(c.mul(v.x).add(s.mul(v.z)), v.y, s.negate().mul(v.x).add(c.mul(v.z)));
@@ -92,7 +94,8 @@ export function makeTowers(world: World, models: Models, detail: THREE.Texture) 
       m.normalNode = transformNormalToView(turn(normalLocal as never, A.w));
       const iron = attribute("ao", "float");
       // slates: courses up the cone, each slate its own shade, a few gone green with lichen
-      const lp = positionLocal;
+      // (the roof as built: once positionNode is set, positionLocal is the placed position)
+      const lp = positionGeometry;
       const row = floor(lp.y.div(2.6 / 14)),
         ang = atan(lp.z, lp.x)
           .div(Math.PI * 2)
