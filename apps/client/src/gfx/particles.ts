@@ -35,6 +35,10 @@ type Kind = {
   amount: (m: MoodState) => unknown;
   nearGround?: [number, number];
   blink?: boolean;
+  /** lit by the mood (default: glows on its own) */
+  light?: (m: MoodState) => unknown;
+  /** an opaque speck over the scene, not light added to it (snow, ash) */
+  solid?: boolean;
 };
 
 export function makeParticles(height: THREE.DataTexture, mood: MoodState, quality: number) {
@@ -70,15 +74,31 @@ export function makeParticles(height: THREE.DataTexture, mood: MoodState, qualit
       wobble: 0.25,
       color: () => vec3(1, 1, 1).mul(1.2),
       amount: (m) => m.u.dust,
+      light: (m) => m.u.sunColor.mul(m.u.sunPower).mul(0.08),
     },
     {
-      n: 500 * k,
-      box: [60, 24, 60],
-      size: [0.05, 0.09],
-      drift: [0.6, -0.9, 0.3],
-      wobble: 1.4,
-      color: (s) => mix(vec3(0.5, 0.32, 0.06), vec3(0.35, 0.4, 0.08), s).mul(0.6),
-      amount: (m) => m.u.leaves,
+      // snow, on the wind: lit by the pale sky and a little by the sun
+      n: 6000 * k,
+      box: [40, 24, 40],
+      size: [0.025, 0.06],
+      drift: [0.85, -1.5, 0.35],
+      wobble: 0.55,
+      color: (s) => vec3(0.9, 0.93, 0.97).mul(s.mul(0.3).add(0.7)),
+      amount: (m) => m.u.snowfall,
+      light: (m) => m.u.horizon.mul(0.85).add(m.u.sunColor.mul(m.u.sunPower.mul(0.06))),
+      solid: true,
+    },
+    {
+      // ash from the fires, slower and darker than the snow
+      n: 1800 * k,
+      box: [50, 26, 50],
+      size: [0.02, 0.05],
+      drift: [0.5, -0.45, 0.25],
+      wobble: 1.1,
+      color: (s) => vec3(0.16, 0.15, 0.145).mul(s.mul(0.6).add(0.5)),
+      amount: (m) => m.u.ash,
+      light: (m) => m.u.horizon.mul(0.6),
+      solid: true,
     },
   ];
   const group = new THREE.Group();
@@ -86,8 +106,9 @@ export function makeParticles(height: THREE.DataTexture, mood: MoodState, qualit
     const m = new THREE.MeshBasicNodeMaterial({
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      fog: false,
+      blending: kd.solid ? THREE.NormalBlending : THREE.AdditiveBlending,
+      // specks take the fog like everything else; lights in the air don't
+      fog: !!kd.solid,
     });
     const id = float(instanceIndex);
     const s1 = hash(id.mul(1.37)),
@@ -138,12 +159,15 @@ export function makeParticles(height: THREE.DataTexture, mood: MoodState, qualit
           .add(0.5)
           .pow(3)
       : float(1);
-    const light = kd === kinds[2] ? mood.u.sunColor.mul(mood.u.sunPower).mul(0.08) : vec3(1, 1, 1);
+    const light = kd.light ? kd.light(mood) : vec3(1, 1, 1);
     const k2 = (disc as F)
       .mul(fade as F)
       .mul(blink as F)
       .mul(kd.amount(mood) as F);
-    m.colorNode = (kd.color(s3 as never) as V).mul(light as V).mul(k2);
+    if (kd.solid) {
+      m.colorNode = (kd.color(s3 as never) as V).mul(light as V);
+      m.opacityNode = k2.mul(0.9);
+    } else m.colorNode = (kd.color(s3 as never) as V).mul(light as V).mul(k2);
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), m);
     mesh.count = Math.round(kd.n);
     mesh.frustumCulled = false;

@@ -70,18 +70,39 @@ export function makeWater(
     texture(detail, wp.xz.mul(0.02).add(time.mul(0.0007))).x.add(smoothstep(1.2, 0.2, depth).mul(0.25)),
   );
   const weed = vec3(0.03, 0.06, 0.02).mul(texture(detail, wp.xz.mul(0.9)).y.add(0.5));
+  // the winter has frozen it: black ice with white cracks, snow blown across it in tongues, and a
+  // few leads of open water over the deep holes, steaming (DESIGN.md: Gniloye)
+  const leadN = texture(detail, wp.xz.mul(0.011)).x.add(texture(detail, wp.xz.mul(0.047)).y.mul(0.3));
+  const open = smoothstep(0.92, 0.98, leadN.add(smoothstep(1.5, 3.5, depth).mul(0.2)));
+  const ice = float(1).sub(open).toVar();
+  const cr = texture(detail, wp.xz.mul(0.09)).z,
+    cr2 = texture(detail, wp.xz.mul(0.31).add(0.4)).z;
+  const crack = smoothstep(0.035, 0.0, cr.sub(0.5).abs())
+    .max(smoothstep(0.02, 0.0, cr2.sub(0.5).abs()).mul(0.6))
+    .mul(ice);
+  const dust = mood
+    .snowOn(float(1), wp)
+    .mul(smoothstep(0.35, 0.75, texture(detail, wp.xz.mul(0.023)).y))
+    .mul(ice);
   m.colorNode = Fn(() => {
     const body = mix(murk, deep, smoothstep(0.2, 2.5, depth));
     let sky = mood.u.fogColor.mul(0.6);
     if (refl) {
-      refl.uvNode = refl.uvNode!.add(ripple.mul(0.018).mul(float(1).sub(mat)));
+      // ice is a still mirror; only the open water ripples
+      refl.uvNode = refl.uvNode!.add(ripple.mul(0.018).mul(float(1).sub(mat)).mul(open));
       sky = refl.rgb as unknown as typeof sky;
     }
-    return mix(mix(body, sky, fres), weed, mat.mul(0.9));
+    const water = mix(mix(body, sky, fres), weed, mat.mul(0.9).mul(open));
+    const blackIce = mix(vec3(0.02, 0.03, 0.038), sky, fres.mul(0.8));
+    return mix(mix(mix(water, blackIce, ice), vec3(0.42, 0.46, 0.5), crack), mood.SNOW, dust);
   })();
-  m.roughnessNode = mix(float(0.06), float(0.85), mat);
+  m.roughnessNode = mix(mix(float(0.06), float(0.85), mat.mul(open)), float(0.62), dust.max(crack));
   m.metalnessNode = float(0);
-  m.opacityNode = smoothstep(0.0, 0.6, depth).mul(0.92).add(0.05).max(mat);
+  m.opacityNode = smoothstep(0.0, 0.6, depth)
+    .mul(0.92)
+    .add(0.05)
+    .max(mat)
+    .max(ice.mul(smoothstep(0, 0.25, depth)));
   // a glint of the sun or moon on the ripples
   const n = normalize(vec3(ripple.x.mul(0.25), 1, ripple.y.mul(0.25)));
   const h = normalize(v.add(mood.u.sunDir));
@@ -89,7 +110,8 @@ export function makeWater(
     pow(max(dot(n, h), 0), 220)
       .mul(mood.u.sunPower)
       .mul(2)
-      .mul(float(1).sub(mat)),
+      .mul(float(1).sub(mat))
+      .mul(float(1).sub(dust)),
   );
   const mesh = new THREE.Mesh(g, m);
   mesh.position.set(360, WATER_Y, 360);

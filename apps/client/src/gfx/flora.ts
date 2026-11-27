@@ -11,6 +11,7 @@ import {
   dFdy,
   dot,
   Fn,
+  faceDirection,
   float,
   fract,
   hash,
@@ -86,7 +87,7 @@ function placed(s: Slot, wind: number, flutter: number) {
   return { position, normal, world, seed: hash(inst.x.mul(0.37).add(inst.z.mul(1.71))) };
 }
 
-function barkMat(s: Slot, t: Tex, tint: number, wind: number, moss: number) {
+function barkMat(s: Slot, t: Tex, mood: MoodState, tint: number, wind: number, moss: number) {
   const m = new THREE.MeshStandardNodeMaterial();
   const P = placed(s, wind, 0);
   m.positionNode = P.position;
@@ -110,26 +111,35 @@ function barkMat(s: Slot, t: Tex, tint: number, wind: number, moss: number) {
   const base = color(tint).mul(furrow.mul(0.8).add(0.3)).mul(d2.x.mul(0.5).add(0.75));
   const up = smoothstep(0.1, 0.8, normalLocal.y.add(d2.y.mul(0.5)));
   const low = smoothstep(4, 0.5, positionLocal.y);
-  m.colorNode = mix(base, vec3(0.05, 0.085, 0.025).mul(d2.x.add(0.6)), max(up, low).mul(moss));
+  // moss on the roots and what faces up; over it, snow along the tops of the boughs
+  m.colorNode = mix(
+    mix(base, vec3(0.05, 0.085, 0.025).mul(d2.x.add(0.6)), max(up, low).mul(moss)),
+    mood.SNOW,
+    mood.snowOn(P.world.y.add(d2.y.sub(0.5).mul(0.3)), positionWorld).mul(0.9),
+  );
   m.normalNode = bump(P.normal as never, furrow.mul(0.035).add(d2.y.mul(0.008)));
   m.roughnessNode = float(0.92);
   return m;
 }
 
-function leafMat(s: Slot, t: Tex, mood: MoodState, colA: number, colB: number, wind: number, gold: number) {
+function leafMat(s: Slot, t: Tex, mood: MoodState, colA: number, colB: number, wind: number) {
   // (an alpha test, not a hashed alpha: the hash's dither freezes into the cached shadow map)
   const m = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide, alphaTest: 0.42 });
   const P = placed(s, wind, 0.05);
   m.positionNode = P.position;
   m.normalNode = P.normal;
   const tx = texture(t.atlas, uv());
-  // one tree in six has turned: old gold and rust among the green
-  const turned = smoothstep(0.82, 0.9, P.seed);
-  const tint = mix(mix(color(colA), color(colB), P.seed.mul(1.2).min(1)), color(0xc0782a), turned.mul(gold));
+  const tint = mix(color(colA), color(colB), P.seed.mul(1.2).min(1));
   // deep in the crown the leaves see less sky
   const ao = attribute("ao", "float");
   const albedo = tx.rgb.mul(tint).mul(2.2);
-  m.colorNode = albedo.mul(ao);
+  // snow on the side of each card that faces up, mostly on the outer leaves (the crown shelters
+  // the inner ones)
+  const snow = mood
+    .snowOn(P.world.y.mul(faceDirection).add(0.25), positionWorld)
+    .mul(ao.mul(0.7).add(0.3))
+    .toVar();
+  m.colorNode = mix(albedo.mul(ao), mood.SNOW.mul(0.85), snow);
   // the small mips average the gaps into the leaves and an alpha test eats them: lift alpha by the
   // mip level (Golus), so a far crown stays as full as a near one
   const tuv = uv().mul((t.atlas.image as HTMLCanvasElement).width);
@@ -138,7 +148,11 @@ function leafMat(s: Slot, t: Tex, mood: MoodState, colA: number, colB: number, w
   // light through the leaves when looking toward the sun, mostly through the outer ones
   const v = normalize(positionWorld.sub(cameraPosition));
   const back = pow(max(dot(v, mood.u.sunDir), 0), 3);
-  m.emissiveNode = albedo.mul(mood.u.sunColor).mul(back.mul(mood.u.sunPower).mul(0.14)).mul(ao.mul(ao));
+  m.emissiveNode = albedo
+    .mul(mood.u.sunColor)
+    .mul(back.mul(mood.u.sunPower).mul(0.14))
+    .mul(ao.mul(ao))
+    .mul(float(1).sub(snow));
   m.roughnessNode = float(0.75);
   return m;
 }
@@ -168,7 +182,7 @@ function bladeMat(s: Slot, mood: MoodState) {
  * beds on the faces, lichen and (where it's damp) moss on what faces the sky.
  */
 /** `near`: the full shader; far off, one projection's worth of fetches and no relief. */
-function stoneMat(s: Slot, t: Tex, tint: number, mossy: boolean, near: boolean) {
+function stoneMat(s: Slot, t: Tex, mood: MoodState, tint: number, mossy: boolean, near: boolean) {
   const m = new THREE.MeshStandardNodeMaterial();
   const P = placed(s, 0, 0);
   m.positionNode = P.position;
@@ -220,13 +234,19 @@ function stoneMat(s: Slot, t: Tex, tint: number, mossy: boolean, near: boolean) 
   const lichen = smoothstep(0.62, 0.8, cell.add(n.mul(0.3))).mul(up.add(0.25).min(1));
   const stone = mix(base, mix(vec3(0.16, 0.16, 0.1), vec3(0.2, 0.11, 0.05), P.seed), lichen.mul(0.4));
   m.roughnessNode = float(0.88);
+  // snow caps on every top, a rim on the ledges
+  const snow = mood.snowOn(nw.y.add(g.sub(0.5).mul(0.4)), wp);
   if (!mossy) {
-    m.colorNode = stone;
+    m.colorNode = mix(stone, mood.SNOW, snow);
     return m;
   }
   const g0 = texture(t.ground0, wp.xz.add(HALF + 0.5).div(SIZE));
   const wet = g0.x.add(g0.y);
-  m.colorNode = mix(stone, vec3(0.04, 0.07, 0.022).mul(g.add(0.5)), up.mul(wet.mul(0.85).add(0.1)));
+  m.colorNode = mix(
+    mix(stone, vec3(0.04, 0.07, 0.022).mul(g.add(0.5)), up.mul(wet.mul(0.85).add(0.1))),
+    mood.SNOW,
+    snow,
+  );
   return m;
 }
 
@@ -271,15 +291,15 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number
   const bark =
     (tint: number, wind: number, moss: number): Part =>
     (s) =>
-      barkMat(s, t, tint, wind, moss);
+      barkMat(s, t, mood, tint, wind, moss);
   const leaf =
-    (a: number, b: number, wind: number, gold = 0): Part =>
+    (a: number, b: number, wind: number): Part =>
     (s) =>
-      leafMat(s, t, mood, a, b, wind, gold);
+      leafMat(s, t, mood, a, b, wind);
   const stone =
     (tint: number, mossy: boolean, near = true): Part =>
     (s) =>
-      stoneMat(s, t, tint, mossy, near && q > 0);
+      stoneMat(s, t, mood, tint, mossy, near && q > 0);
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
   const specs: Spec[] = [
@@ -294,12 +314,13 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number
         const g = (part: string, lod: number) => model(models, `oak${i}_${part}_lod${lod}`);
         return {
           near: [
+            // oaks keep their dead leaves through the winter
             [g("bark", 0), bark(0x5a4a3c, 0.25, 1)],
-            [g("leaves", 0), leaf(0x4f7a2a, 0x8a8a2a, 0.3, 1)],
+            [g("leaves", 0), leaf(0x5e4026, 0x7a5a36, 0.3)],
           ],
           far: [
             [g("bark", 1), bark(0x5a4a3c, 0.25, 1)],
-            [g("leaves", 1), leaf(0x4f7a2a, 0x8a8a2a, 0.3, 1)],
+            [g("leaves", 1), leaf(0x5e4026, 0x7a5a36, 0.3)],
           ],
         };
       }),
@@ -316,11 +337,11 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number
         return {
           near: [
             [nr.bark, bark(0x4a3a30, 0.15, 0.3)],
-            [nr.leaves, leaf(0x3d5a3a, 0x52643a, 0.2)],
+            [nr.leaves, leaf(0x2a3d30, 0x384834, 0.2)],
           ],
           far: [
             [fr.bark, bark(0x4a3a30, 0.15, 0.3)],
-            [fr.leaves, leaf(0x3d5a3a, 0x52643a, 0.2)],
+            [fr.leaves, leaf(0x2a3d30, 0x384834, 0.2)],
           ],
         };
       }),
@@ -342,7 +363,7 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number
       lodAt: Infinity,
       radius: 1.5,
       shadow: false,
-      variants: range(2).map((i) => ({ near: [[S.fern(400 + i), leaf(0x6a8a3a, 0x8a7a2a, 0.12)]] })),
+      variants: range(2).map((i) => ({ near: [[S.fern(400 + i), leaf(0x5a3c22, 0x4e4230, 0.12)]] })),
     },
     {
       kind: "reed",

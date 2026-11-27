@@ -143,7 +143,10 @@ export function makePost(
     const l = mix(l0, l0.mul(l0).mul(float(3).sub(l0.mul(2))), u.contrast.sub(1).mul(4).add(0.3).clamp(0, 1));
     t.mulAssign(l.div(max(l0, 0.0001)));
     t.assign(mix(t, vec3(l), smoothstep(0.55, 1, l).mul(0.12)));
-    t.assign(mix(vec3(l), t, u.saturation.mul(0.93)).add(vec3(0.008, 0.002, 0).add(u.lift)));
+    t.assign(mix(vec3(l), t, u.saturation.mul(0.93)).add(vec3(0, 0.002, 0.007).add(u.lift)));
+    // split tone: shadows lean cold steel, highlights a little warm, so a fire or a lit window is
+    // the warmest thing in a cold frame
+    t.mulAssign(mix(vec3(0.93, 0.98, 1.06), vec3(1.03, 1.0, 0.96), smoothstep(0.06, 0.6, l)));
     const s = pow(t.max(0), vec3(1 / 2.2)) as unknown as V3;
     const n = interleavedGradientNoise(screenCoordinate.xy)
       .add(interleavedGradientNoise(screenCoordinate.xy.add(37)))

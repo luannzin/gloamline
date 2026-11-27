@@ -130,8 +130,15 @@ export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState
   const L = (dx: number, dz: number) => textureLoad(tex.height, ivec2(int(ix.add(dx)), int(iz.add(dz)))).x;
   const ground = mix(mix(L(0, 0), L(1, 0), u0), mix(L(0, 1), L(1, 1), u0), v0);
   const dist = vec2(cx, cz).sub(cameraPosition.xz).length();
+  // under the snow most of the field is buried: it stands through in patches where the drift is thin
+  const thin = smoothstep(
+    0.48,
+    0.72,
+    texture(detail, vec2(cx, cz).div(61)).level(float(0)).y.add(float(1).sub(mood.u.snow).mul(0.8)),
+  );
   const keep = smoothstep(reach, reach * 0.62, dist)
     .mul(allowed)
+    .mul(thin)
     .mul(smoothstep(0.2, 0.5, c2.add(allowed.mul(0.5))));
 
   // --- the blade
@@ -164,6 +171,8 @@ export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState
     .mul(mix(float(0.5), float(1.15), r3))
     .mul(patchLen)
     .mul(flower.mul(0.35).add(1))
+    // the snow's depth hides the bottom of every blade
+    .mul(float(1).sub(mood.u.snow.mul(0.3)))
     .mul(shown);
   // the wind has combed the field: most blades lean its way, a few any way
   const az = mix(
@@ -184,7 +193,8 @@ export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState
   const windK = gust
     .mul(1.4)
     .add(sin(time.mul(1.7).add(r1.mul(20)).add(ph)).mul(0.25))
-    .mul(mood.u.leaves.mul(0.6).add(0.5));
+    // windier where the snow is blowing
+    .mul(mood.u.snowfall.mul(0.6).add(0.5));
   const wdir = vec2(0.8, 0.6);
   const k = r3
     .mul(1.1)
@@ -242,13 +252,13 @@ export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState
     vv = varying(v);
   // the field's own colour (shared with the ground under it), a little brighter in the blades
   const tint = fieldTint(vec2(cx, cz), g0, detail, true).mul(1.3);
-  const dry = vec3(0.22, 0.18, 0.08);
+  const dry = vec3(0.24, 0.2, 0.13);
   const tintV = varying(tint);
-  // flower heads: white, butter yellow, violet, a few red
+  // seed heads gone over in the cold: pale tufts, rust, a few black
   const fh = hash(c2.mul(31.7));
   const petal = mix(
-    mix(vec3(0.75, 0.72, 0.62), vec3(0.8, 0.55, 0.06), smoothstep(0.3, 0.35, fh)),
-    mix(vec3(0.3, 0.16, 0.55), vec3(0.62, 0.06, 0.04), smoothstep(0.85, 0.9, fh)),
+    mix(vec3(0.42, 0.38, 0.3), vec3(0.26, 0.13, 0.05), smoothstep(0.3, 0.35, fh)),
+    mix(vec3(0.2, 0.15, 0.09), vec3(0.04, 0.035, 0.03), smoothstep(0.85, 0.9, fh)),
     smoothstep(0.6, 0.65, fh),
   );
   const petalV = varying(petal),

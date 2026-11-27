@@ -62,7 +62,11 @@ type Mood = {
   fireflies: number;
   embers: number;
   dust: number;
-  leaves: number;
+  /** how much snow lies on what faces the sky (0 bare .. 1 everything flat is white) */
+  snow: number;
+  /** falling snow and falling ash, in the air around the camera */
+  snowfall: number;
+  ash: number;
 };
 
 const dir = (az: number, el: number): [number, number, number] => {
@@ -71,92 +75,100 @@ const dir = (az: number, el: number): [number, number, number] => {
   return [Math.cos(e) * Math.sin(a), Math.sin(e), -Math.cos(e) * Math.cos(a)];
 };
 
-// region order: gloamwood, mire, keep, hollow, highlands
+// The winter after the flash (DESIGN.md): an overcast that never clears, a weak low sun under it,
+// the sky doing most of the lighting and the snow taking its colour. Saturation is kept low so the
+// warm lights (fires, lanterns, windows, the Column) are the only colour.
+// region order: Chernolesye, Gniloye, the Ostrog, Shaft No. 9, Kolkhoz Zarya
 const MOODS: Mood[] = [
   {
-    // Gloamwood: late afternoon gold through the canopy, a golden-green haze
-    sun: dir(248, 14),
-    sunColor: 0xffb868,
-    sunPower: 3.5,
-    zenith: 0x5482a6,
-    horizon: 0xf0c486,
-    ground: 0x2a3320,
-    ambient: 0.55,
-    fogColor: 0xa09a6c,
-    fogDensity: 0.005,
-    fogFalloff: 0.04,
-    fogBase: 6,
-    mist: 0.02,
-    mistBase: 14,
-    mistFalloff: 0.18,
-    scatter: 1.6,
-    clouds: 0.3,
-    cloudColor: 0xf0dcc0,
+    // Chernolesye: a slit of low sun under the overcast, shafts between the pines, blue-grey air
+    sun: dir(248, 9),
+    sunColor: 0xffa266,
+    sunPower: 1.7,
+    zenith: 0x44505d,
+    horizon: 0xb2b5b8,
+    ground: 0x6a6e74,
+    ambient: 0.72,
+    fogColor: 0x8b949d,
+    fogDensity: 0.0065,
+    fogFalloff: 0.035,
+    fogBase: 8,
+    mist: 0.03,
+    mistBase: 10,
+    mistFalloff: 0.2,
+    scatter: 1.5,
+    clouds: 0.82,
+    cloudColor: 0xb4b9c0,
     stars: 0,
-    exposure: 1.0,
-    saturation: 1.05,
-    contrast: 1.08,
-    lift: 0.0,
-    rays: 1.8,
-    bloom: 0.22,
-    fireflies: 0.35,
+    exposure: 0.95,
+    saturation: 0.78,
+    contrast: 1.1,
+    lift: 0.004,
+    rays: 1.5,
+    bloom: 0.2,
+    fireflies: 0,
     embers: 0,
-    dust: 0.8,
-    leaves: 1,
+    dust: 0.15,
+    snow: 0.9,
+    snowfall: 0.7,
+    ash: 0.15,
   },
   {
-    // The Mire: moonlit night, cold and wet
+    // Gniloye: moonlight on the ice through a tear in the cloud, white mist lying on the marsh
     sun: dir(135, 32),
     sunColor: 0x9fb8ff,
-    sunPower: 0.75,
-    zenith: 0x0a1226,
-    horizon: 0x24324f,
-    ground: 0x0b1210,
-    ambient: 0.32,
-    fogColor: 0x1c2a3c,
-    fogDensity: 0.009,
+    sunPower: 0.7,
+    zenith: 0x0e1729,
+    horizon: 0x2a3850,
+    ground: 0x1a222c,
+    ambient: 0.36,
+    fogColor: 0x263548,
+    fogDensity: 0.01,
     fogFalloff: 0.09,
     fogBase: 4,
-    mist: 0.06,
-    mistBase: 3.5,
+    mist: 0.08,
+    mistBase: 3,
     mistFalloff: 0.45,
     scatter: 0.8,
-    clouds: 0.3,
-    cloudColor: 0x3a4a6a,
-    stars: 1,
-    exposure: 1.45,
-    saturation: 0.8,
+    clouds: 0.55,
+    cloudColor: 0x3a4a62,
+    stars: 0.8,
+    exposure: 1.5,
+    saturation: 0.7,
     contrast: 1.12,
     lift: 0.012,
-    rays: 0.6,
+    rays: 0.5,
     bloom: 0.38,
-    fireflies: 1,
+    // green motes over the bad water
+    fireflies: 0.5,
     embers: 0,
-    dust: 0.1,
-    leaves: 0,
+    dust: 0.05,
+    snow: 0.95,
+    snowfall: 0.35,
+    ash: 0,
   },
   {
-    // Cinder Keep: storm at dusk, a red sun under the clouds, embers in the wind
+    // The Ostrog: red dusk under a storm, the fires inside still burning, embers and ash on the wind
     sun: dir(300, 7),
-    sunColor: 0xff7a3a,
-    sunPower: 3.0,
-    zenith: 0x2e2a38,
-    horizon: 0xb0644a,
-    ground: 0x221a18,
-    ambient: 0.4,
-    fogColor: 0x6a4b45,
-    fogDensity: 0.0045,
+    sunColor: 0xff6a2a,
+    sunPower: 2.6,
+    zenith: 0x2a2630,
+    horizon: 0xa8583e,
+    ground: 0x2e2624,
+    ambient: 0.42,
+    fogColor: 0x5e4642,
+    fogDensity: 0.005,
     fogFalloff: 0.03,
     fogBase: 20,
     mist: 0.02,
     mistBase: 24,
     mistFalloff: 0.12,
     scatter: 1.8,
-    clouds: 0.78,
-    cloudColor: 0x5a4a55,
+    clouds: 0.86,
+    cloudColor: 0x544850,
     stars: 0,
     exposure: 1.05,
-    saturation: 0.92,
+    saturation: 0.86,
     contrast: 1.15,
     lift: 0.004,
     rays: 0.9,
@@ -164,74 +176,83 @@ const MOODS: Mood[] = [
     fireflies: 0,
     embers: 1,
     dust: 0.3,
-    leaves: 0,
+    snow: 0.5,
+    snowfall: 0.2,
+    ash: 0.85,
   },
   {
-    // The Hollow outside: grey mountain light
+    // Shaft No. 9 outside: grey mountain white-out
     sun: HOLLOW_SUN,
-    sunColor: 0xfff0d8,
-    sunPower: 3.2,
-    zenith: 0x5d7690,
-    horizon: 0xaab4b8,
-    ground: 0x2a2a2a,
-    ambient: 0.5,
-    fogColor: 0x8a949a,
-    fogDensity: 0.004,
-    fogFalloff: 0.03,
+    sunColor: 0xe8ecf0,
+    sunPower: 1.4,
+    zenith: 0x75808b,
+    horizon: 0xc2c8cc,
+    ground: 0x5c6268,
+    ambient: 0.72,
+    fogColor: 0xa8b0b7,
+    fogDensity: 0.007,
+    fogFalloff: 0.025,
     fogBase: 30,
-    mist: 0.01,
+    mist: 0.02,
     mistBase: 26,
     mistFalloff: 0.2,
-    scatter: 0.9,
-    clouds: 0.55,
-    cloudColor: 0xd8dde0,
+    scatter: 0.6,
+    clouds: 0.92,
+    cloudColor: 0xd0d4d8,
     stars: 0,
-    exposure: 1.0,
-    saturation: 0.85,
-    contrast: 1.08,
+    exposure: 0.92,
+    saturation: 0.7,
+    contrast: 1.05,
     lift: 0,
-    rays: 1.0,
-    bloom: 0.2,
+    rays: 0.4,
+    bloom: 0.15,
     fireflies: 0,
     embers: 0,
-    dust: 0.5,
-    leaves: 0,
+    dust: 0.1,
+    snow: 1,
+    snowfall: 1,
+    ash: 0,
   },
   {
-    // Pale Highlands: wide pale gold light, wind in the grass
-    sun: dir(200, 28),
-    sunColor: 0xfff1d2,
-    sunPower: 3.6,
-    zenith: 0x4f7fb5,
-    horizon: 0xd9dccf,
-    ground: 0x3a3a28,
-    ambient: 0.6,
-    fogColor: 0xb7c2c4,
-    fogDensity: 0.0025,
+    // Kolkhoz Zarya: wide pale overcast over the fields, reeds through the snow, blowing snow
+    sun: dir(200, 14),
+    sunColor: 0xffd2a0,
+    sunPower: 1.8,
+    zenith: 0x56626e,
+    horizon: 0xc3c5c4,
+    ground: 0x6c7076,
+    ambient: 0.72,
+    fogColor: 0xa1a8ae,
+    fogDensity: 0.004,
     fogFalloff: 0.02,
     fogBase: 40,
     mist: 0.03,
     mistBase: 22,
     mistFalloff: 0.14,
     scatter: 1.0,
-    clouds: 0.45,
-    cloudColor: 0xffffff,
+    clouds: 0.8,
+    cloudColor: 0xd6d6d6,
     stars: 0,
-    exposure: 1.0,
-    saturation: 1.0,
-    contrast: 1.05,
+    exposure: 0.95,
+    saturation: 0.8,
+    contrast: 1.08,
     lift: 0,
-    rays: 0.7,
+    rays: 0.8,
     bloom: 0.16,
     fireflies: 0,
     embers: 0,
-    dust: 0.3,
-    leaves: 0.2,
+    dust: 0.1,
+    snow: 0.95,
+    snowfall: 0.5,
+    ash: 0.1,
   },
 ];
-// under the Hollow's rock: dark, the shafts and the glowing caps do the lighting
+// under the mine's rock: dark, the shafts and the glowing caps do the lighting
 const CAVE: Mood = {
   ...MOODS[3],
+  snow: 0,
+  snowfall: 0,
+  ash: 0,
   sunPower: 4.2,
   ambient: 0.025,
   fogColor: 0x10161a,
@@ -247,7 +268,6 @@ const CAVE: Mood = {
   rays: 1.0,
   bloom: 0.45,
   dust: 0.45,
-  leaves: 0,
 };
 
 const NUMS = [
@@ -271,7 +291,9 @@ const NUMS = [
   "fireflies",
   "embers",
   "dust",
-  "leaves",
+  "snow",
+  "snowfall",
+  "ash",
 ] as const;
 const COLS = ["sunColor", "zenith", "horizon", "ground", "fogColor", "cloudColor"] as const;
 
@@ -461,6 +483,17 @@ export function makeMood(land: Land, world: World, detail: THREE.Texture, qualit
     return fog(col, k);
   })();
 
+  /**
+   * How much snow lies on a surface at `wp` whose world normal points `up` (its y): all of it on the
+   * flat, a rim on ledges, none on cliffs; where the mood has little, it lies in patches that drift
+   * with the same noise as the mist.
+   */
+  const snowOn = (up: Node1, wp: Node3) => {
+    const n = texture(detail, wp.xz.div(37)).x.add(texture(detail, wp.xz.div(7.3)).y.mul(0.35));
+    const flat = smoothstep(0.42, 0.85, up);
+    return smoothstep(0.22, 0.42, flat.mul(u.snow.add(n.sub(0.68).mul(0.75))));
+  };
+
   /** Blends the moods for a camera at `p` and eases the uniforms toward them. */
   function update(p: THREE.Vector3, dt: number) {
     const edge = land.weights(p.x, p.z, tmp);
@@ -542,6 +575,9 @@ export function makeMood(land: Land, world: World, detail: THREE.Texture, qualit
     hemi,
     dome,
     fogNode,
+    snowOn,
+    /** fresh snow's albedo (linear): a touch blue, it's lit by the sky */
+    SNOW: vec3(0.7, 0.73, 0.78),
     update,
     /** The sky alone, for the image-based light. */
     skyScene,
