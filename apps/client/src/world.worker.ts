@@ -21,6 +21,7 @@ self.onmessage = (e: MessageEvent<In>) => {
     w.ground.height.buffer,
     w.ground.ground0.buffer,
     w.ground.ground1.buffer,
+    w.wear.buffer,
     w.field.buffer,
     w.cave.positions.buffer,
     w.cave.normals.buffer,

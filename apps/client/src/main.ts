@@ -8,6 +8,7 @@ import { randomSeed } from "@/lib/avatar";
 import { buildWorld } from "./build";
 import { makeFlora } from "./gfx/flora";
 import { makeGrass } from "./gfx/grass";
+import { loadModels } from "./gfx/models";
 import { makeMood } from "./gfx/mood";
 import { makeParticles } from "./gfx/particles";
 import { makePost, type Quality } from "./gfx/post";
@@ -67,7 +68,7 @@ async function boot() {
     if (intervals.length < 120) requestAnimationFrame(probe);
   };
   requestAnimationFrame(probe);
-  const world = await buildWorld(say);
+  const [world, models] = await Promise.all([buildWorld(say), loadModels(["rocks.glb", "trees.glb"])]);
   const refresh = intervals.length > 20 ? intervals.sort((a, b) => a - b)[intervals.length >> 1] : 1000 / 60;
   say("Lighting the world…", 0.85);
 
@@ -84,7 +85,7 @@ async function boot() {
   const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 3200);
   const tex = groundTextures(world);
   const detail = detailTexture();
-  const atlas = foliageAtlas();
+  const atlas = foliageAtlas(q > 0 ? 1024 : 512);
   const mood = makeMood(land, world, detail, q);
   scene.add(mood.sun, mood.sun.target, mood.hemi, mood.dome);
   scene.fogNode = mood.fogNode;
@@ -99,7 +100,7 @@ async function boot() {
     scene.environmentIntensity = mood.envIntensity;
   };
   const terrain = makeTerrain(tex, detail, mood, q);
-  const flora = makeFlora(world, { ground0: tex.ground0, detail, atlas }, mood, q);
+  const flora = makeFlora(world, { ground0: tex.ground0, detail, atlas }, mood, q, models);
   const grass = q > 0 ? makeGrass(tex, detail, mood, q) : null;
   const particles = makeParticles(tex.height, mood, q);
   const wanderers = makeWanderers(camera, document.getElementById("tags")!);

@@ -6,7 +6,18 @@ import { clamp, hash2, type Noise, smooth } from "./noise";
 import { graveyard } from "./ruins";
 import { type Ground, HALF, HOLLOW, heightAt, KEEP, type RoadIndex, SIZE, WATER_Y } from "./terrain";
 
-export const KINDS = ["oak", "pine", "dead", "rock", "fern", "reed", "stone", "grave", "shroom"] as const;
+export const KINDS = [
+  "oak",
+  "pine",
+  "dead",
+  "rock",
+  "fern",
+  "reed",
+  "stone",
+  "grave",
+  "shroom",
+  "crag",
+] as const;
 export type Kind = (typeof KINDS)[number];
 
 /** What the rule sees at a candidate point. */
@@ -78,6 +89,18 @@ const RULES: Record<Kind, Rule> = {
     scale: [0.6, 1.6],
     p: (s) => (s.covered ? 0.45 : s.w[0] * 0.035) * smooth(2.5, 4, s.road),
   },
+  // outcrops: big layered rock half sunk into the steep ground, so a cliff is stone, not a
+  // stretched texture
+  crag: {
+    cell: 10,
+    scale: [1.4, 3.6],
+    // (the keep's cliff takes them; only its flat top, where the walls stand, doesn't)
+    p: (s) =>
+      smooth(0.42, 0.7, s.slope) *
+      smooth(7, 14, s.road) *
+      (s.plateau < 0.9 ? 1 : 0) *
+      (s.h > WATER_Y + 1 ? 1 : 0),
+  },
 };
 
 export function scatter(g: Ground, roads: RoadIndex, field: Float32Array, noise: Noise, seed: number) {
@@ -98,8 +121,8 @@ export function scatter(g: Ground, roads: RoadIndex, field: Float32Array, noise:
         if (!fill(x, z, kind)) continue;
         // clearings and groves: the same noise thins every kind a little differently
         const grove = smooth(-0.35, 0.3, noise.fbm(x / 140 + ki, z / 140, 3));
-        if (hash2(cx, cz, seed + ki * 31) > rule.p(site) * (kind === "reed" || kind === "shroom" ? 1 : grove))
-          continue;
+        const free = kind === "reed" || kind === "shroom" || kind === "crag";
+        if (hash2(cx, cz, seed + ki * 31) > rule.p(site) * (free ? 1 : grove)) continue;
         const s = rule.scale[0] + (rule.scale[1] - rule.scale[0]) * hash2(cx, cz, seed + ki * 17) ** 1.6;
         list.push(x, site.h, z, hash2(cz, cx, seed + ki * 19) * Math.PI * 2, s);
       }
