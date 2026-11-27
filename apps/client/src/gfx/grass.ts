@@ -78,8 +78,8 @@ function clump(BLADES: number) {
 }
 
 export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState, quality: number) {
-  const side = [0, 140, 200, 270][quality],
-    step = [0, 0.38, 0.3, 0.28][quality];
+  const side = [0, 150, 220, 290][quality],
+    step = [0, 0.34, 0.27, 0.25][quality];
   const reach = side * step * 0.5;
   const origin = uniform(new THREE.Vector2());
   const m = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide });
@@ -108,7 +108,7 @@ export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState
   const nx = g1.z.mul(2).sub(1),
     nz = g1.w.mul(2).sub(1),
     ny = max(float(1).sub(nx.mul(nx)).sub(nz.mul(nz)), 0.05).sqrt();
-  const tall = g0.x.mul(0.55).add(g0.y.mul(0.85)).add(g0.z.mul(0.6)).add(g0.w.mul(0.78));
+  const tall = g0.x.mul(0.5).add(g0.y.mul(0.8)).add(g0.z.mul(0.55)).add(g0.w.mul(0.55));
   const allowed = float(1)
     .sub(g1.x)
     .mul(float(1).sub(smoothstep(0.12, 0.45, g1.y)))
@@ -157,8 +157,13 @@ export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState
     .mul(patchLen)
     .mul(flower.mul(0.35).add(1))
     .mul(shown);
-  const az = r2.mul(6.2832).add(r1.mul(2));
-  const tilt = r3.mul(0.35).add(0.08);
+  // the wind has combed the field: most blades lean its way, a few any way
+  const az = mix(
+    r2.mul(6.2832).add(r1.mul(2)),
+    float(0.64).add(r2.sub(0.5).mul(1.6)),
+    r1.greaterThan(0.3).select(float(0.75), float(0)),
+  );
+  const tilt = r3.mul(0.5).add(0.18);
   const d = vec3(sin(tilt).mul(cos(az)), cos(tilt), sin(tilt).mul(sin(az)));
   const pe = vec3(cos(tilt).mul(cos(az)), sin(tilt).negate(), cos(tilt).mul(sin(az)));
   const sd = vec3(sin(az).negate(), 0, cos(az));
@@ -242,7 +247,7 @@ export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState
     headV = varying(head.mul(flower));
   const albedo = Fn(() => {
     const base = mix(tintV, dry, seed.mul(seed).mul(0.5)).toVar();
-    base.mulAssign(mix(float(0.45), float(1.25), vv.pow(0.7)));
+    base.mulAssign(mix(float(0.62), float(1.2), vv.pow(0.7)));
     return mix(base.mul(mix(float(0.85), float(1.1), seed)), petalV, headV);
   })();
   m.colorNode = albedo;

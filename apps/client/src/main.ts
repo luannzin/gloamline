@@ -77,7 +77,7 @@ async function boot() {
   requestAnimationFrame(probe);
   const [world, models] = await Promise.all([
     buildWorld(say),
-    loadModels(["rocks.glb", "trees.glb", "architecture.glb"]),
+    loadModels(["rocks.glb", "trees.glb", "architecture.glb", "wanderer.glb"]),
   ]);
   const refresh = intervals.length > 20 ? intervals.sort((a, b) => a - b)[intervals.length >> 1] : 1000 / 60;
   say("Lighting the world…", 0.85);
@@ -113,7 +113,7 @@ async function boot() {
   const flora = makeFlora(world, { ground0: tex.ground0, detail, atlas }, mood, q, models);
   const grass = q > 0 ? makeGrass(tex, detail, mood, q) : null;
   const particles = makeParticles(tex.height, mood, q);
-  const wanderers = makeWanderers(camera, document.getElementById("tags")!);
+  const wanderers = makeWanderers(camera, document.getElementById("tags")!, models);
   scene.add(
     terrain.group,
     flora.group,

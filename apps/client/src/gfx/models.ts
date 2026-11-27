@@ -23,7 +23,8 @@ export async function loadModels(files: string[]): Promise<Models> {
 }
 
 /**
- * What the shaders read: `sway` and `ao` from COLOR_0 where the script wrote them (leaves), else
+ * What the shaders read: `sway`, `ao` and `extra` from COLOR_0's r, g, b where the script wrote
+ * them (each script says what its channels mean), else
  * sway grown from the height and reach of each vertex (bark: still at the root, loose at the tips),
  * and UVs turned back to three's v-up (glTF stores them flipped).
  */
@@ -31,14 +32,17 @@ function prepare(g: THREE.BufferGeometry) {
   const pos = g.attributes.position,
     n = pos.count;
   const sway = new Float32Array(n),
-    ao = new Float32Array(n).fill(1);
+    ao = new Float32Array(n).fill(1),
+    extra = new Float32Array(n);
   const col = g.attributes.color;
   if (col) {
     for (let i = 0; i < n; i++) {
       sway[i] = col.getX(i);
       ao[i] = col.getY(i);
+      extra[i] = col.getZ(i);
     }
     g.deleteAttribute("color");
+    g.setAttribute("extra", new THREE.BufferAttribute(extra, 1));
   } else {
     g.computeBoundingBox();
     const top = Math.max(1, g.boundingBox!.max.y);
