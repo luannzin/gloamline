@@ -1,4 +1,4 @@
-# Trees for Gloamline: broadleaf oaks and dead trees, grown by space colonization (Runions 2007)
+# Trees for Zimovye: broadleaf oaks and dead trees, grown by space colonization (Runions 2007)
 # into a crown envelope, thickened by the pipe model (a parent's area is its children's), skinned
 # into one merged trunk-and-branch mesh, and crowned with twig cards. Two levels of detail each.
 #

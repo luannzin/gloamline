@@ -4,7 +4,7 @@
 // draws everyone else's 100 ms in the past, between the two poses around that moment.
 import { joinRoom } from "trystero";
 
-const APP_ID = "luannzin/gloamline";
+const APP_ID = "luannzin/zimovye";
 const BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 export const MAX_PLAYERS = 8;
 
@@ -23,7 +23,7 @@ export function secretFromHash(hash: string) {
 
 async function roomName(secret: string) {
   const h = new Uint8Array(
-    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`gloamline:${secret}`)),
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`zimovye:${secret}`)),
   );
   return Array.from(h.subarray(0, 16), (b) => b.toString(16).padStart(2, "0")).join("");
 }

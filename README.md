@@ -1,6 +1,6 @@
-# Gloamline
+# Zimovye
 
-A souls-like world at dusk for up to eight people, in the browser. Open the page, invite people with a link, and walk the same world together. No account, no install, no server to run.
+Co-op survival in a Soviet backwater the winter after the flash, for up to eight people in the browser. Open the page, invite people with a link, and walk the same world together. No account, no install, no server to run.
 
 Everything you see is made by code: the land, its rain-cut gullies, the caves inside the mountain and the sky are built when the page opens; the trees, rocks, the Spire, the keep's roofs and banners and the other players' wanderer are grown by Blender scripts in `tools/blender`. There are no texture files.
 
@@ -38,18 +38,25 @@ Then open `http://localhost:5190`. It needs a browser with WebGPU (Chrome or Edg
 | Frame rate | `H` |
 | Menu | `Esc` |
 
-**Playing with friends**: press **Invite friends**, copy the link, send it. Whoever opens it joins your world and sees you as a hooded wanderer carrying a lantern, with your name over you; `Tab` shows everyone on the map. Up to eight people per link.
+**Playing with friends**: choose **Invite friends** in the menu (the link is copied) and send it. Whoever opens it joins your world and sees your survivor carrying a lantern, with your name over you; `Tab` shows everyone on the map. Up to eight people per link.
 
-## Detail levels
+## Video settings
 
-Each level is the same world, drawn with less. The menu picks one; a first visit picks Low on a phone, Medium with 4 GB of memory or less, High otherwise.
+**Settings** in the menu opens a full-screen page (Video and Controls tabs). Every setting takes effect as it's changed, without reloading: a world detail is rebuilt beside what's showing and swapped in when it's compiled.
 
-| Level | What it is |
+- **Preset** (Low, Medium, High, Ultra) sets every detail and a resolution scale; changing a detail after shows **Custom**. A first visit picks Low on a phone, Medium with 4 GB of memory or less, High otherwise.
+- **Resolution scale**, 33% to 200% of the display's own pixels. With temporal upscaling the scene renders at that share and is rebuilt to full resolution; over 100% it renders more and is scaled down.
+- **Dynamic resolution** lowers the scale (to half at most) when frames run late. Off holds it exactly.
+- **Frame rate limit**, 24 to 240, or unlimited (the display's own rate).
+- **Details**, each on its own: upscaling, shadows, view distance, grass, ambient occlusion, sun shafts, contact shadows, reflections, sky lighting, weather and foliage textures.
+- **Detect best settings** times every preset at 100%, each frame waited on to the GPU's finish, and keeps the best one that holds 60 fps (or the display's rate, if slower) with a fifth to spare: Ultra with the scale raised as far as it still fits, or Low with it lowered.
+
+| Preset | What it is |
 |---|---|
-| **Low** | No grass, no ambient occlusion or shafts, light from a sky hemisphere, a 1024 shadow map, the canvas itself scaled for the frame rate |
-| **Medium** | Grass to 26 m, the sky as image-based light, shafts (20 steps), ambient occlusion, temporal upscaling from as low as 45% |
-| **High** | Grass to 30 m with flowers, long shadows marched over the land, 40-step shafts, upscaling from 50% |
-| **Ultra** | Grass to 38 m (9 blades a clump), a 4096 shadow map over 240 m, 60-step shafts, output up to 1.5x the display's pixels, upscaling from 60% |
+| **Low** | 60%, no upscaling (the canvas is scaled), no grass, occlusion or shafts, light from a sky hemisphere, a 1024 shadow map |
+| **Medium** | 80% upscaled, grass to 26 m, the sky as image-based light, shafts (20 steps), ambient occlusion |
+| **High** | 100%, grass to 30 m, long shadows marched over the land, 40-step shafts, contact shadows |
+| **Ultra** | 100%, grass to 38 m (9 blades a clump), a 4096 shadow map over 240 m, 60-step shafts, finer contact shadows |
 
 ## How it works
 

@@ -1,6 +1,6 @@
 // Every texture is made here at load: the ground data from the world build, one tileable detail
 // noise that every material samples at several scales, and a foliage atlas drawn on a canvas.
-import { rng, SIZE, WEAR, type World } from "@gloamline/world";
+import { rng, SIZE, WEAR, type World } from "@zimovye/world";
 import * as THREE from "three/webgpu";
 
 export function groundTextures(w: World) {

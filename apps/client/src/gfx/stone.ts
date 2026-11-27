@@ -1,6 +1,6 @@
 // Worked and living stone: the ostrog's blocks (one instanced box) and the mine's rock (the surface
 // nets mesh).
-import { BLOCK, type World } from "@gloamline/world";
+import { BLOCK, type World } from "@zimovye/world";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import {
   abs,

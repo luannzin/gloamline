@@ -2,7 +2,7 @@
 // the vertex shader lifts from the height texture. Every grid vertex lands on a whole metre, so it
 // reads one texel exactly. Skirts hide the cracks between levels. Shading reads the ground
 // textures: region weights, roads, the normal, and the shared detail noise.
-import { HALF, SIZE, WATER_Y } from "@gloamline/world";
+import { HALF, SIZE, WATER_Y } from "@zimovye/world";
 import {
   cameraPosition,
   Fn,
@@ -92,7 +92,8 @@ export function makeTerrain(
   tex: GroundTex,
   detail: THREE.Texture,
   mood: MoodState,
-  quality: number,
+  /** the shadows setting (video.ts): long shadows over the land from High */
+  shadows: number,
   trails: Trails,
 ) {
   const group = new THREE.Group();
@@ -167,7 +168,7 @@ export function makeTerrain(
     const dapple = float(1).sub(canopy.mul(beyond).mul(0.8));
     // long shadows past the shadow map's box: hills and ridges shading the land beyond them
     // (inside the box the shadow map has it, and a 1 m heightmap would only add stair-steps)
-    const longShadow = quality > 1 ? mix(float(1), far, beyond) : float(1);
+    const longShadow = shadows > 1 ? mix(float(1), far, beyond) : float(1);
     m.receivedShadowNode = Fn(([s]: [THREE.Node<"float">]) => s.mul(dapple).mul(longShadow)) as never;
     return m;
   }

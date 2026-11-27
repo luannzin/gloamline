@@ -2,7 +2,7 @@
 // strip that bends along a circular arc (curvature from its seed plus the wind), tapers to a tip,
 // twists a little, and carries a normal that follows the arc and rounds across its width. Clumps sit
 // on a grid that follows the camera in whole cells, so a blade keeps its spot in the world.
-import { HALF, SIZE } from "@gloamline/world";
+import { HALF, SIZE } from "@zimovye/world";
 import {
   attribute,
   cameraPosition,
@@ -85,6 +85,7 @@ export function makeGrass(
   tex: GroundTex,
   detail: THREE.Texture,
   mood: MoodState,
+  /** the grass setting (video.ts), 1..3: how far it reaches and how thick it stands */
   quality: number,
   trails: Trails,
 ) {

@@ -1,7 +1,7 @@
 // The map: drawn once from the world as an image the interface shows under everyone's marks, both
 // behind Tab and turning in the minimap. A winter survey sheet: snow-pale relief, the woods as dark
 // stipple, roads as dark lines, the ice, the fort's stones, and the Column in ember.
-import { BLOCK, COLUMN, HALF, SIZE, WATER_Y, type World } from "@gloamline/world";
+import { BLOCK, COLUMN, HALF, SIZE, WATER_Y, type World } from "@zimovye/world";
 
 const PX = 1024,
   STEP = SIZE / PX;

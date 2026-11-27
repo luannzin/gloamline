@@ -1,7 +1,7 @@
 // First person on foot. The body is a vertical capsule that walks on the heightmap, stands on rocks,
 // rubble and wall tops, slides around trunks and stone, and is pushed out of the Hollow's rock by its
 // distance field. Movement runs in short substeps so nothing thin can be walked through.
-import { BLOCK, caveAt, HALF, heightAt, WATER_Y, type World } from "@gloamline/world";
+import { BLOCK, caveAt, HALF, heightAt, WATER_Y, type World } from "@zimovye/world";
 import * as THREE from "three/webgpu";
 
 const R = 0.38,
@@ -78,9 +78,10 @@ export function makePlayer(
     running = false,
     bob = 0,
     breath = 0,
-    // the view: 0 through your own eyes, 1 over your shoulder (V), eased between
-    behind = 0,
-    wantBehind = false;
+    // the view: 0 through your own eyes, 1 over your shoulder (V), eased between. Over the shoulder
+    // first: it's where the menu's camera lands (stage.ts)
+    behind = 1,
+    wantBehind = true;
   const keys = new Set<string>();
   // the ruins' solid stones and the village's walls (world: index.ts)
   const B = world.solid;

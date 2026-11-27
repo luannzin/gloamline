@@ -2,7 +2,7 @@
 
 The images live in `refs/` (gitignored: they belong to their studios and are for looking at, never
 for shipping). Run `docs/refs.sh` to fetch them again. What each one teaches is below; DESIGN.md
-says what Gloamline takes from it.
+says what Zimovye takes from it.
 
 ## Fidelity and light: Elden Ring
 
@@ -26,7 +26,7 @@ Sources: [GamesRadar on Akiman's comparison](https://www.gamesradar.com/games/ac
 
 `refs/gta6-hud/gta6-hud-1.jpg` is a frame of Rockstar's Extended Look footage (the minimap);
 `gta6-hud-5.png` and `-6.png` are a community recreation for FiveM, useful for layout only. Nothing
-here is copied: Gloamline takes the principles (contextual, corners, glanceable) and draws its own.
+here is copied: Zimovye takes the principles (contextual, corners, glanceable) and draws its own.
 
 - **Contextual.** Meters, stars and prompts appear when they matter and fade when they don't; while
   driving, the screen shows little more than the minimap and the distance left.

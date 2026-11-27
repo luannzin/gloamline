@@ -3,7 +3,7 @@
 // warmest thing in most frames. A tall open shell whose radius and billows come from the shared
 // noise, rising slowly; soft at its silhouette, lit orange from beneath, and a glow over the fires
 // that shows above the ridge. Drawn without fog: it's meant to be found.
-import { COLUMN, heightAt, type World } from "@gloamline/world";
+import { COLUMN, heightAt, type World } from "@zimovye/world";
 import {
   abs,
   atan,

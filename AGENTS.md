@@ -1,4 +1,4 @@
-# Gloamline: where to look
+# Zimovye: where to look
 
 Co-op survival in a Soviet backwater the winter after the flash, for up to eight players in the
 browser. Bun workspaces, TypeScript,
@@ -13,7 +13,8 @@ Three.js r187 (WebGPU, TSL), React + coss ui for the interface, Trystero for the
 | What's planned, and why this stack? | `docs/PLAN.md` |
 | How do players meet? | `apps/client/src/net.ts` |
 | What does the map (`Tab`) show? | `apps/client/src/map.ts` (drawn once from the world), `ui/app.tsx` (`WorldMap`) |
-| What does each detail level change? | `Quality` in `apps/client/src/gfx/post.ts`; the `q > n` checks where each system is made |
+| What does each video setting change? | `apps/client/src/video.ts` (the settings, presets; plain data shared by the game and the settings screen); each system reads its own level where it's made; `dress`, `apply` and the detection test in `main.ts` |
+| How does the menu frame the world, and how does play start? | `apps/client/src/stage.ts` (the menu's camera and the move to the shoulder), `ui/app.tsx` (`Splash`, `Menu`) |
 
 ## Rules
 
@@ -27,8 +28,7 @@ Three.js r187 (WebGPU, TSL), React + coss ui for the interface, Trystero for the
   the Blender scripts in `tools/blender` (headless, `-t 4`, outputs committed to
   `apps/client/public/models`, loaded by `gfx/models.ts`). Edit the generator and rerun it, never the
   output. The Column is a shader (`gfx/column.ts`), the trails a stamped texture (`gfx/trails.ts`).
-- **coss components are copied, not edited** (`apps/client/src/components/ui`). The critters and the
-  palette are copied from Sightline (`src/lib/avatar.ts`, `palette.ts`); a change there needs copying here.
+- **coss components are copied, not edited** (`apps/client/src/components/ui`).
 - **Checks**: `bun run check` (world contracts, prints `ok`), `bun run typecheck`, `bun run lint`.
   For visual work, the nine viewpoints (`1` to `9`) are the fixed poses to compare; `__game.post.pin(r)`
   in the dev tools holds the render scale so frames compare fairly.

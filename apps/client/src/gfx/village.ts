@@ -3,7 +3,7 @@
 // every piece by the material its script wrote into COLOR_0.r (`sway` after models.ts): weathered
 // logs and boards, trim painted a colour per house and peeling, galvanised iron gone to rust,
 // window glass lit warm in the houses someone still lives in, stone and brick; snow on every top.
-import { HOUSE, HOUSES, POLE, PROP, PROPS, WIRES, type World } from "@gloamline/world";
+import { HOUSE, HOUSES, POLE, PROP, PROPS, WIRES, type World } from "@zimovye/world";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   attribute,

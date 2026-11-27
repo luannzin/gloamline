@@ -1,7 +1,7 @@
 // Meshes made from code: trees, ferns, reeds, rocks, mushrooms, standing stones, graves. Each shape
 // carries `sway` (0 at the root, 1 at the tips) for the wind, and leaf cards carry normals pointing
 // out of their crown, so a canopy shades as one soft mass instead of a pile of flat cards.
-import { Noise, rng } from "@gloamline/world";
+import { Noise, rng } from "@zimovye/world";
 import * as THREE from "three/webgpu";
 
 export class Builder {

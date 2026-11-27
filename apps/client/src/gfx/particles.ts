@@ -1,7 +1,7 @@
 // Small lights in the air: fireflies over the mire and woods, embers off the keep, dust in the
 // light, falling leaves. Each kind is one draw of camera-facing quads placed by the GPU in a box
 // that wraps around the camera. The mood says how much of each a place has.
-import { HALF } from "@gloamline/world";
+import { HALF } from "@zimovye/world";
 import {
   cameraPosition,
   Fn,
@@ -41,10 +41,11 @@ type Kind = {
   solid?: boolean;
 };
 
-export function makeParticles(height: THREE.DataTexture, mood: MoodState, quality: number) {
+/** `effects`: the weather setting (video.ts), 0 half the specks, 1 all of them */
+export function makeParticles(height: THREE.DataTexture, mood: MoodState, effects: number) {
   const right = uniform(new THREE.Vector3(1, 0, 0)),
     up = uniform(new THREE.Vector3(0, 1, 0));
-  const k = quality > 1 ? 1 : 0.5;
+  const k = effects > 0 ? 1 : 0.5;
   const kinds: Kind[] = [
     {
       n: 900 * k,

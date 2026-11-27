@@ -1,4 +1,4 @@
-# Rocks for Gloamline: four outcrops (layered, jointed, flat-topped) and four boulders, each at two
+# Rocks for Zimovye: four outcrops (layered, jointed, flat-topped) and four boulders, each at two
 # levels of detail, into one GLB. Geometry only: the game shades them itself (gfx/flora.ts).
 #
 #   blender -b --factory-startup -t 4 --python tools/blender/rocks.py -- apps/client/public/models/rocks.glb

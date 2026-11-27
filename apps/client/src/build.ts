@@ -1,6 +1,6 @@
 // Builds the world on every core: ground rows and cave slices go to a pool of workers, then one of
 // them finishes the world from the pieces.
-import { type Ground, jobs, SEED, type World } from "@gloamline/world";
+import { type Ground, jobs, SEED, type World } from "@zimovye/world";
 
 export async function buildWorld(say: (stage: string, share: number) => void, seed = SEED): Promise<World> {
   const n = Math.max(2, Math.min(12, (navigator.hardwareConcurrency || 4) - 1));

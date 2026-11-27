@@ -1,6 +1,6 @@
 // The Mire's water: a mirror broken by small ripples, dark as tea where it's deep, fading out over
 // the mud at the edge. Depth comes from the heightmap, so no depth buffer is read.
-import { HALF, SIZE, WATER_Y } from "@gloamline/world";
+import { HALF, SIZE, WATER_Y } from "@zimovye/world";
 import {
   cameraPosition,
   dot,
@@ -29,7 +29,8 @@ export function makeWater(
   height: THREE.DataTexture,
   detail: THREE.Texture,
   mood: MoodState,
-  quality: number,
+  /** the reflections setting (video.ts): none, a third of the screen's resolution, or half */
+  reflections: number,
 ) {
   const g = new THREE.PlaneGeometry(760, 760, 1, 1).rotateX(-Math.PI / 2);
   const m = new THREE.MeshStandardNodeMaterial({ transparent: true, depthWrite: false });
@@ -53,7 +54,7 @@ export function makeWater(
     .sub(1)
     .add(r3.xy.sub(0.5).mul(0.35))
     .add(f.normalize().mul(ring.mul(0.5)));
-  const refl = quality > 0 ? reflector({ resolutionScale: quality > 1 ? 0.5 : 0.3 }) : null;
+  const refl = reflections > 0 ? reflector({ resolutionScale: reflections > 1 ? 0.5 : 0.3 }) : null;
   const v = normalize(cameraPosition.sub(wp));
   const fres = pow(float(1).sub(max(v.y, 0)), 4)
     .mul(0.85)
@@ -120,6 +121,8 @@ export function makeWater(
     // the mirror plane faces the target's +z: turn it to face up
     refl.target.rotateX(-Math.PI / 2);
     mesh.add(refl.target);
+    // its render target goes with the material (a change of detail rebuilds the water: main.ts)
+    m.addEventListener("dispose", () => refl.dispose());
   }
   return mesh;
 }

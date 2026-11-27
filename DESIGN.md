@@ -1,6 +1,6 @@
 ---
-name: Gloamline
-description: Co-op survival in a Soviet backwater the winter after the flash. The world is the menu; the HUD is a GTA-style contextual layer in the corners; the light is built like a FromSoftware landscape.
+name: Zimovye
+description: Co-op survival in a Soviet backwater the winter after the flash. The world is the menu, framed on you standing in it; the HUD is a GTA-style contextual layer in the corners; the light is built like a FromSoftware landscape.
 colors:
   soot: "#0b0d10"
   frost: "#e9eef2"
@@ -21,20 +21,41 @@ typography:
 references: docs/REFERENCES.md
 ---
 
-# Gloamline: design
+# Zimovye: design
 
 The winter after the flash. A district of wooden villages, a kolkhoz, a mine and an old fort,
-somewhere east of anywhere, under a sky that hasn't cleared since. The name is the light: the
-gloaming never quite ends. Up to eight survivors from one link.
+somewhere east of anywhere, under a sky that hasn't cleared since. The name is a trapper's winter
+hut (зимовье), the kind you sit a winter out in. Up to eight survivors from one link.
 
 The references and what each teaches are in `docs/REFERENCES.md` (images in `refs/`, gitignored).
 
+## The mark
+
+A log hut's gable with smoke standing from the ridge: someone is wintering there, and the smoke is
+the Column. Soot or frost for the hut, ember for the smoke, always; next to it ZIMOVYE in Oswald 600,
+and under it «Зимовье · зима после вспышки» tracked wide.
+
 ## The world is the menu
 
-- The game runs behind every screen. Loading builds the district on every core while the page says
-  what it's doing; the menu is that world blurred and darkened; entering is the blur lifting
-  (600ms), never a cut.
+- The game runs behind every screen. The splash (faceta's, in this winter) is a field of snow with
+  the mark and the name cut in, snow blowing across on the wind, what's being built and how far in
+  the corner, a tip opposite, the real progress as a line along the bottom. When the world is ready
+  the field is cut away along a slant, showing it.
+- The menu is a shot of you standing in the world, kept sharp: from behind and to the left of your
+  survivor, the lantern lit, looking out at what they face, so they stand in the right third. The
+  camera breathes and leans toward the pointer; the first time, it arrives from high and further
+  back. The words sit bottom-left in the HUD's type over the world, no panel, with only the cold
+  pooling under them: Enter the zone, Invite friends, Settings.
+- Starting is one camera move, never a cut (God of War's): the chosen line flicks, the words go, and
+  the camera swings in to your shoulder as the lens widens (2.4 s). The controls are yours when it
+  lands. `Esc` plays it backwards.
+- Settings is a full-screen page over the world: its name and the tabs across the top (Video,
+  Controls) on a rule, Back with `Esc` at the right; the rows down the left (the name in Oswald, what
+  it does under it in small muted type, the control to the right), the world still showing through
+  on the right so a change is seen as it's made. A change never reloads: a world detail is rebuilt
+  beside what's drawing and swapped in.
 - Nothing covers the middle of the frame while playing except the area reveal and the map.
+- No name to choose and no lobby screen yet: everyone is given a name the district would know.
 
 ## Light: built like a FromSoftware landscape
 
@@ -92,14 +113,15 @@ the corners and fades out when it has nothing to say.
 - **One hot colour per meaning.** Ember is the Column and everything that leads to it; each meter
   has its own; nothing else on screen is saturated.
 - **Words are signs.** Labels are short, uppercase Oswald, the Russian under place names in Oswald 400
-  at 70%. Buttons say what happens ("Enter the zone", "Invite friends", "Copy link").
-- Keyboard focus gets everything hover gets. Reduced motion turns slides and the blur lift into fades.
+  at 70%. Buttons say what happens ("Enter the zone", "Invite friends", "Copy invite link").
+- Keyboard focus gets everything hover gets; the menu answers the arrows and Enter. Reduced motion
+  turns slides into fades and the camera's moves into cuts.
 - Remote players carry their name over the head (Oswald 14px, `frost`), fading out from 120 to 160 m.
 
 ## Controls
 
 Look: mouse. Move: `W` `A` `S` `D`. Run: `Shift` (uses stamina). Jump: `Space`. Lantern: `F` (warms you,
-slowly). View: `V` (first person, or over the shoulder). Map: `Tab`. Menu: `Esc`. Viewpoints: `1` to
+slowly; lit to begin with). View: `V` (over the shoulder, where play starts, or first person). Map: `Tab`. Menu: `Esc`. Viewpoints: `1` to
 `9`. Stats: `H`.
 
 ## Deep snow

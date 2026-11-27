@@ -1,7 +1,7 @@
 // What crowns the keep's whole towers: slate roofs with an iron finial, and on every other one a
 // banner on a pole, moving in the wind. Meshes from tools/blender/architecture.py, placed from the
 // world's tower list; their COLOR_0.g (`ao` after models.ts) marks iron.
-import { KEEP, TOWER, type World } from "@gloamline/world";
+import { KEEP, TOWER, type World } from "@zimovye/world";
 import {
   atan,
   attribute,

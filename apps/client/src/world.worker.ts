@@ -1,6 +1,6 @@
 // Builds pieces of the world off the main thread. The main thread hands out jobs, then sends every
 // piece to one worker to finish (mesh the cave, lay the ruins, scatter the props).
-import { finishWorld, type Ground, type Job, runJob } from "@gloamline/world";
+import { finishWorld, type Ground, type Job, runJob } from "@zimovye/world";
 
 type In =
   | { type: "job"; seed: number; job: Job; id: number }

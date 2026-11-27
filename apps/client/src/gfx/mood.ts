@@ -1,7 +1,7 @@
 // Each region has a mood: its sun (or moon), sky, air and grade. The camera's position blends them,
 // so walking from the woods into the mire turns afternoon into a moonlit night over a few hundred
 // metres. Everything that reads the mood reads these uniforms.
-import { HOLLOW_SUN, type Land, NREG, underRock, type World } from "@gloamline/world";
+import { HOLLOW_SUN, type Land, NREG, underRock, type World } from "@zimovye/world";
 import {
   abs,
   cameraPosition,
@@ -297,7 +297,14 @@ const NUMS = [
 ] as const;
 const COLS = ["sunColor", "zenith", "horizon", "ground", "fogColor", "cloudColor"] as const;
 
-export function makeMood(land: Land, world: World, detail: THREE.Texture, quality: number) {
+/** `shadows` and `sky`: the video settings (video.ts) for the sun's shadow map and the sky's light. */
+export function makeMood(
+  land: Land,
+  world: World,
+  detail: THREE.Texture,
+  shadows: number,
+  skyLight: boolean,
+) {
   const cu = () => uniform(new THREE.Color()),
     fu = () => uniform(0);
   const u = {
@@ -321,27 +328,38 @@ export function makeMood(land: Land, world: World, detail: THREE.Texture, qualit
     up2 = new THREE.Vector3();
   let cover = 0,
     first = true;
-  // the image-based light (Medium and up)
-  const useEnv = quality > 0;
-  let envIntensity = 0,
+  // the image-based light (the sky setting)
+  let useEnv = false,
+    envIntensity = 0,
     envAge = 0;
   // sun power, clouds, cover and sun direction when the map was last drawn (NaN: never)
-  const lastEnv = new Float32Array(6).fill(Number.NaN),
+  const lastEnv = new Float32Array(6),
     nowEnv = new Float32Array(6);
 
   const sun = new THREE.DirectionalLight(0xffffff, 3);
   sun.castShadow = true;
-  const map = [1024, 2048, 2048, 4096][quality];
-  sun.shadow.mapSize.set(map, map);
-  const S = quality > 2 ? 120 : 95;
-  Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: 1, far: 900 });
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.04;
   // the shadow map is redrawn only when the box moves a few metres or the sun turns (abyssal-garden
   // draws its once); swaying leaves keep the shadow of where they were, which nobody can see
   sun.shadow.autoUpdate = false;
-  const lastBox = new THREE.Vector3(1e9, 0, 0),
+  const lastBox = new THREE.Vector3(),
     lastSun = new THREE.Vector3();
+  let S = 95;
+  /** The shadow map's size and box (shadows 0..3), and whether the sky lights the scene. */
+  function configure(shadows: number, skyLight: boolean) {
+    useEnv = skyLight;
+    lastEnv.fill(Number.NaN);
+    envAge = 1;
+    const size = [1024, 2048, 2048, 4096][shadows];
+    S = shadows > 2 ? 120 : 95;
+    // (the shadow node resizes its map to this on its next draw)
+    sun.shadow.mapSize.set(size, size);
+    Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: 1, far: 900 });
+    sun.shadow.camera.updateProjectionMatrix();
+    lastBox.set(1e9, 0, 0);
+  }
+  configure(shadows, skyLight);
   const hemi = new THREE.HemisphereLight(0xffffff, 0x222222, 0.5);
 
   // the air seen along `d`, without clouds or the disc: a thin bright band at the horizon (the
@@ -579,6 +597,7 @@ export function makeMood(land: Land, world: World, detail: THREE.Texture, qualit
     /** fresh snow's albedo (linear): a touch blue, it's lit by the sky */
     SNOW: vec3(0.7, 0.73, 0.78),
     update,
+    configure,
     /** The sky alone, for the image-based light. */
     skyScene,
     envDue,

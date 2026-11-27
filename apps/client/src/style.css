@@ -29,7 +29,7 @@
   --color-background: var(--background);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
-  /* Gloamline (DESIGN.md) */
+  /* Zimovye (DESIGN.md) */
   --color-soot: #0b0d10;
   --color-frost: #e9eef2;
   --color-frost-soft: #aeb6bd;
@@ -90,31 +90,36 @@
   display: block;
 }
 
-/* the world behind the menu: blurred, darker, the cold pooling at the left and a fire's glow low down */
+/* the menu's shot of the world, kept sharp: only the cold pooling bottom-left under the words, and
+   the foot of the frame a little darker. It lifts as the camera moves to your shoulder. */
 #veil {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  backdrop-filter: blur(14px) brightness(0.55) saturate(0.7);
   background:
-    linear-gradient(90deg, rgb(8 10 13 / 0.7), transparent 58%),
-    radial-gradient(120% 60% at 0% 100%, rgb(255 122 47 / 0.16), transparent 60%);
-  /* back to the menu (a key press) is quick; into the world, the blur lifts slowly */
-  transition: opacity 200ms ease-out;
+    radial-gradient(85% 70% at 0% 100%, rgb(8 10 13 / 0.6), transparent 72%),
+    linear-gradient(0deg, rgb(8 10 13 / 0.3), transparent 28%);
+  transition: opacity 400ms ease-out;
 }
 body.playing #veil {
   opacity: 0;
-  transition-duration: 600ms;
+  transition-duration: 1600ms;
   transition-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
-/* the menu fades in; it also slides a little when motion is welcome */
+/* the menu fades in; it also slides a little when motion is welcome. The first time, it waits for
+   the splash's cut and the camera's arrival (stage.ts). */
 .menu {
   animation: fade 300ms ease-out both;
 }
+.menu.menu-first {
+  animation-delay: 1100ms;
+}
 @media (prefers-reduced-motion: no-preference) {
   .menu {
-    animation: enter 300ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-name: enter;
+    animation-duration: 420ms;
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
   }
 }
 @keyframes fade {
@@ -125,7 +130,147 @@ body.playing #veil {
 @keyframes enter {
   from {
     opacity: 0;
-    translate: -8px 0;
+    translate: -10px 0;
+  }
+}
+/* into play: the chosen line flicks (zombie-roguelike's confirm), then the words go */
+.menu-shell {
+  transition: opacity 160ms ease-out;
+}
+.menu-shell.is-leaving {
+  opacity: 0;
+  transition: opacity 600ms ease-out 240ms;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .menu-item.is-chosen {
+    animation: menu-select 360ms steps(1, end) 1;
+  }
+}
+@keyframes menu-select {
+  0%,
+  24%,
+  52%,
+  82%,
+  100% {
+    translate: 0 0;
+    color: var(--color-frost);
+  }
+  12% {
+    translate: 5px 0;
+    color: var(--color-frost-muted);
+  }
+  38% {
+    translate: -4px 0;
+    color: var(--color-frost-muted);
+  }
+  66% {
+    translate: 3px 0;
+    color: var(--color-frost-muted);
+  }
+}
+
+/* The splash (faceta's, in this winter): a field of snow with one lighter facet across it, snow
+   blowing through on the wind, the wordmark cut in. Leaving, the field is cut away along a slant. */
+.splash {
+  background: #d9e0e6;
+}
+.splash::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--color-frost);
+  clip-path: polygon(0 0, 63% 0, 41% 100%, 0 100%);
+}
+.splash-snow i {
+  position: absolute;
+  right: -24vw;
+  top: calc(14% + var(--i) * 8.6%);
+  width: calc(28px + var(--i) * 11px);
+  height: 2px;
+  background: var(--color-soot);
+  opacity: 0.5;
+  rotate: -7deg;
+  animation: gust 1.9s cubic-bezier(0.55, 0, 0.75, 0.25) infinite;
+  animation-delay: calc(var(--i) * 210ms);
+}
+@keyframes gust {
+  to {
+    translate: -150vw 18vh;
+  }
+}
+.splash.is-leaving {
+  animation: fade-out 240ms ease-out forwards;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .splash.is-leaving {
+    animation: splash-cut 560ms cubic-bezier(0.77, 0, 0.175, 1) forwards;
+  }
+  /* the mark is drawn, the smoke rises from the ridge, the name is cut in, the line under it settles */
+  .wordmark-intro .mark-roof,
+  .wordmark-intro .mark-logs {
+    stroke-dasharray: 1;
+    animation: draw 560ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  }
+  .wordmark-intro .mark-logs {
+    animation-delay: 160ms;
+  }
+  .wordmark-intro .mark-smoke {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: rise 900ms cubic-bezier(0.23, 1, 0.32, 1) 460ms both;
+  }
+  .wordmark-intro .wordmark-word {
+    animation: word-in 520ms cubic-bezier(0.77, 0, 0.175, 1) 380ms both;
+  }
+  .wordmark-intro .wordmark-sub {
+    animation: sub-in 800ms cubic-bezier(0.2, 0.7, 0.2, 1) 820ms both;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash-snow {
+    display: none;
+  }
+}
+@keyframes splash-cut {
+  from {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  }
+  to {
+    clip-path: polygon(124% 0, 100% 0, 100% 100%, 100% 100%);
+  }
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+    opacity: 0;
+  }
+  1% {
+    opacity: 1;
+  }
+}
+@keyframes rise {
+  from {
+    scale: 1 0;
+    opacity: 0;
+  }
+}
+@keyframes word-in {
+  from {
+    clip-path: inset(-0.3em 100% -0.3em 0);
+  }
+  to {
+    clip-path: inset(-0.3em -0.2em -0.3em 0);
+  }
+}
+@keyframes sub-in {
+  from {
+    opacity: 0;
+    letter-spacing: 0.7em;
   }
 }
 

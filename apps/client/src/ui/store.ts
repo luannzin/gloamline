@@ -1,8 +1,10 @@
 // What the interface shows, set by the game and read by React. The game never renders UI and the UI
 // never touches the world: they meet here.
 import { useSyncExternalStore } from "react";
+import { type Video, withPreset } from "../video";
 
-export type Phase = "loading" | "menu" | "playing";
+/** `entering`: the menu's camera is moving to your shoulder (stage.ts); play starts when it lands */
+export type Phase = "loading" | "menu" | "entering" | "playing";
 export type Person = { id: string; name: string; seed: number; you?: boolean };
 /** Someone on the map: map position (0..1, north up) and heading (radians, clockwise from north). */
 export type Mark = Person & { u: number; v: number; heading: number };
@@ -14,7 +16,15 @@ export type UIState = {
   phase: Phase;
   stage: string;
   progress: number;
-  quality: number;
+  /** the video settings asked for (video.ts) */
+  video: Video;
+  /** a world detail is being rebuilt (seconds: the old one keeps drawing meanwhile) */
+  videoBusy: boolean;
+  /** the detection test is running (the world is held still), and what it's doing or found */
+  detecting: boolean;
+  detect: string | null;
+  /** played once already: the menu offers to continue */
+  started: boolean;
   /** the place being revealed, and a counter so the same place can reveal twice */
   area: { name: string; ru: string; key: number } | null;
   party: Person[];
@@ -35,7 +45,12 @@ let state: UIState = {
   phase: "loading",
   stage: "Waking up…",
   progress: 0,
-  quality: 2,
+  // (the game sets the saved settings before anything shows them)
+  video: withPreset({ dynamic: true, fps: 0 } as Video, 2),
+  videoBusy: false,
+  detecting: false,
+  detect: null,
+  started: false,
   area: null,
   party: [],
   invite: null,
@@ -79,9 +94,11 @@ export const ui = {
   },
   /** Filled in by the game once it can act on them. */
   actions: {
-    enter: (_name: string) => {},
+    enter: () => {},
     invite: () => {},
-    quality: (_q: number) => {},
+    video: (_v: Video) => {},
+    /** times the presets here and keeps the best this machine holds */
+    detect: () => {},
   },
 };
 

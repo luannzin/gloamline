@@ -1,10 +1,10 @@
-// Boot, lobby and the frame loop. The world builds on every core while the page says what it's
-// doing, then runs blurred behind the menu so shaders compile and resolution settles before anyone
-// walks in (DESIGN.md: the world is the menu).
+// Boot, menu and the frame loop. The world builds on every core while the splash says what it's
+// doing, then runs behind the menu, framed on you standing in it, so shaders compile and resolution
+// settles before anyone walks in (DESIGN.md: the world is the menu).
 import "./style.css";
-import { COLUMN, HALF, HOLLOW, Land, NREG, REGIONS, SIZE } from "@gloamline/world";
+import { COLUMN, HALF, HOLLOW, heightAt, Land, NREG, REGIONS, SIZE } from "@zimovye/world";
 import * as THREE from "three/webgpu";
-import { randomSeed } from "@/lib/avatar";
+import { randomName, randomSeed } from "@/lib/party";
 import { makeBody } from "./body";
 import { buildWorld } from "./build";
 import { makeColumn } from "./gfx/column";
@@ -13,7 +13,7 @@ import { makeGrass } from "./gfx/grass";
 import { loadModels } from "./gfx/models";
 import { makeMood } from "./gfx/mood";
 import { makeParticles } from "./gfx/particles";
-import { makePost, type Quality } from "./gfx/post";
+import { makePost } from "./gfx/post";
 import { makeCave, makeRuins } from "./gfx/stone";
 import { makeTerrain } from "./gfx/terrain";
 import { detailTexture, foliageAtlas, groundTextures } from "./gfx/textures";
@@ -25,16 +25,29 @@ import { makeWater } from "./gfx/water";
 import { drawMap, toMap } from "./map";
 import { type Lobby, newSecret, openLobby, poseAt, secretFromHash } from "./net";
 import { makePlayer } from "./player";
+import { makeStage } from "./stage";
 import { mountUI } from "./ui/mount";
 import { type Mark, type Person, ui } from "./ui/store";
+import {
+  DRESS,
+  type Details,
+  differ,
+  LENS,
+  loadVideo,
+  PRESET_NAMES,
+  SCALE_MAX,
+  SCALE_MIN,
+  saveVideo,
+  type Video,
+  withPreset,
+} from "./video";
 
 const canvas = document.getElementById("c") as HTMLCanvasElement;
 mountUI(document.getElementById("ui")!);
 const say = (stage: string, progress: number) => ui.set({ stage, progress });
 
-function pickQuality(): Quality {
-  const saved = Number(localStorage.getItem("quality") ?? Number.NaN);
-  if (saved >= 0 && saved <= 3) return saved as Quality;
+/** A first visit's preset: Low on a phone, Medium with 4 GB of memory or less, High otherwise. */
+function firstPreset() {
   const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8;
   if (matchMedia("(pointer: coarse)").matches) return 0;
   return mem <= 4 ? 1 : 2;
@@ -48,7 +61,7 @@ const VIEWS: number[][] = [
   [-392, -332, -404, HOLLOW.floor + 30, -380, HOLLOW.floor + 0.2],
   [40, -446, 70, 120, -790],
   [-352, -148, -364, HOLLOW.floor + 6, -205],
-  // 7: into the low sun through Gloamwood (shafts, leaves lit from behind)
+  // 7: into the low sun through Chernolesye (shafts, leaves lit from behind)
   [-250, 190, -350, 40, 230],
   // 8: the keep's courtyard, toward the inner keep
   [405, -222, 362, 76, -266],
@@ -57,8 +70,9 @@ const VIEWS: number[][] = [
 ];
 
 async function boot() {
-  const q = pickQuality();
-  ui.set({ quality: q });
+  // the settings asked for; what's built from them catches up (`dressed`, `lensed` below)
+  let want = loadVideo(firstPreset());
+  ui.set({ video: want });
   const renderer = new THREE.WebGPURenderer({
     canvas,
     antialias: false,
@@ -103,44 +117,90 @@ async function boot() {
   const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 3200);
   const tex = groundTextures(world);
   const detail = detailTexture();
-  const atlas = foliageAtlas(q > 0 ? 1024 : 512);
-  const mood = makeMood(land, world, detail, q);
+  const mood = makeMood(land, world, detail, want.shadows, want.sky > 0);
   scene.add(mood.sun, mood.sun.target, mood.hemi, mood.dome);
   scene.fogNode = mood.fogNode;
-  // image-based light from the sky itself, redrawn when the sky has changed enough (mood.ts)
-  const pmrem = q > 0 ? new THREE.PMREMGenerator(renderer) : null;
-  let envRT: THREE.RenderTarget | null = null;
-  const envUpdate = () => {
-    if (pmrem && mood.envDue()) {
-      envRT = pmrem.fromScene(mood.skyScene, 0, 1, 3000, { size: 256, renderTarget: envRT as never });
-      scene.environment = envRT.texture;
-    }
-    scene.environmentIntensity = mood.envIntensity;
-  };
   const trails = makeTrails();
-  const terrain = makeTerrain(tex, detail, mood, q, trails);
-  const flora = makeFlora(world, { ground0: tex.ground0, detail, atlas }, mood, q, models);
-  const grass = q > 0 ? makeGrass(tex, detail, mood, q, trails) : null;
-  const particles = makeParticles(tex.height, mood, q);
   const wanderers = makeWanderers(camera, document.getElementById("tags")!, models);
   scene.add(
-    terrain.group,
-    flora.group,
-    particles.group,
     makeRuins(world, detail),
     makeCave(world, detail),
     makeColumn(world, detail, mood),
     makeTowers(world, models, detail),
     makeVillage(world, models, detail, mood),
-    makeWater(tex.height, detail, mood, q),
     wanderers.group,
   );
-  if (grass) scene.add(grass.mesh);
 
-  // the lantern: warm, short, on F
+  // What the video details change (video.ts), built apart so a change rebuilds only this, in place,
+  // the world and the models kept: the ground's shading, the props' reach, the grass, the weather,
+  // the water's mirror and the light from the sky (the dressing); and the lens.
+  const shared = new Set<THREE.BufferGeometry>(models.values());
+  function dress(v: Details) {
+    const atlas = foliageAtlas(v.textures > 0 ? 1024 : 512);
+    const terrain = makeTerrain(tex, detail, mood, v.shadows, trails);
+    const flora = makeFlora(world, { ground0: tex.ground0, detail, atlas }, mood, v.distance, models);
+    const grass = v.grass > 0 ? makeGrass(tex, detail, mood, v.grass, trails) : null;
+    const particles = makeParticles(tex.height, mood, v.effects);
+    const group = new THREE.Group().add(
+      terrain.group,
+      flora.group,
+      particles.group,
+      makeWater(tex.height, detail, mood, v.reflections),
+    );
+    if (grass) group.add(grass.mesh);
+    // image-based light from the sky itself, redrawn when the sky has changed enough (mood.ts)
+    const pmrem = v.sky > 0 ? new THREE.PMREMGenerator(renderer) : null;
+    let envRT: THREE.RenderTarget | null = null;
+    return {
+      group,
+      sky() {
+        if (pmrem && mood.envDue()) {
+          envRT = pmrem.fromScene(mood.skyScene, 0, 1, 3000, { size: 256, renderTarget: envRT as never });
+          scene.environment = envRT.texture;
+        }
+        scene.environmentIntensity = mood.envIntensity;
+      },
+      /** Lays out what's around the camera. */
+      update() {
+        terrain.update(camera);
+        camera.updateMatrixWorld();
+        flora.update(camera);
+        grass?.update(camera.position);
+        particles.update(camera);
+      },
+      dispose() {
+        scene.remove(group);
+        group.traverse((o) => {
+          const m = o as THREE.Mesh;
+          if (!m.isMesh) return;
+          if (!shared.has(m.geometry)) m.geometry.dispose();
+          (m.material as THREE.Material).dispose();
+        });
+        atlas.dispose();
+        envRT?.dispose();
+        pmrem?.dispose();
+        scene.environment = null;
+      },
+    };
+  }
+  /** The frame time dynamic resolution holds: the display's refresh, or the cap when it's slower. */
+  const budget = (fps: number) => Math.max(1000 / 240, refresh, fps ? 1000 / fps : 0);
+  const lens = (v: Video) => {
+    const p = makePost(renderer, scene, camera, mood, v);
+    p.target = budget(v.fps);
+    return p;
+  };
+  // what's built, and from which settings
+  let d = dress(want),
+    dressed = want,
+    post = lens(want),
+    lensed = want;
+  scene.add(d.group);
+
+  // the lantern: warm, short, on F; lit to begin with, the warmest thing in the menu's shot
   const lantern = new THREE.PointLight(0xffb066, 0, 16, 1.6);
   scene.add(lantern);
-  let lanternOn = false;
+  let lanternOn = true;
 
   // how deep the snow is under (x, z), 0..1: the mood's snow on ground that's near level, none on
   // the roads (trodden) or under the mine's rock. The shader's patches aren't counted: close enough.
@@ -163,20 +223,16 @@ async function boot() {
     () => body.canRun,
     () => snowDepth(player.pos.x, player.pos.z),
   );
-  const post = makePost(renderer, scene, camera, mood, q);
-  post.target = Math.max(1000 / 240, refresh);
+  const stage = makeStage(camera, (x, z) => heightAt(world.ground.height, x, z));
 
   const v = VIEWS[0];
   player.teleport(v[0], v[1], v[2], v[3], v[4]);
   const tick = (dt: number, active: boolean) => {
     player.update(dt, active);
+    stage.update(dt, player.pos.x, player.pos.y, player.pos.z, player.yaw);
     mood.update(camera.position, dt);
-    envUpdate();
-    terrain.update(camera);
-    camera.updateMatrixWorld();
-    flora.update(camera);
-    grass?.update(camera.position);
-    particles.update(camera);
+    d.sky();
+    d.update();
     post.frame();
     lantern.position.set(
       camera.position.x + Math.sin(-player.yaw) * 0.4,
@@ -190,11 +246,118 @@ async function boot() {
   tick(0, false);
   await renderer.compileAsync(scene, camera);
 
-  // --- the lobby: open when the page came from a link, or when someone asks for one ---
+  // --- the settings take effect as they change. The scale, dynamic resolution and the cap apply at
+  // once; a lens detail rebuilds the lens at once; a world detail builds a new dressing and compiles
+  // it beside the old one, which keeps the world moving meanwhile (seconds), then swaps it in ---
+  let settling: Promise<void> | null = null;
+  async function settle() {
+    ui.set({ videoBusy: true });
+    try {
+      while (differ(want, dressed, DRESS)) {
+        const v = want;
+        const next = dress(v);
+        next.update();
+        await renderer.compileAsync(next.group, camera, scene);
+        d.dispose();
+        mood.configure(v.shadows, v.sky > 0);
+        d = next;
+        dressed = v;
+        scene.add(d.group);
+      }
+    } finally {
+      settling = null;
+      ui.set({ videoBusy: false });
+    }
+  }
+  function apply(next: Video) {
+    want = next;
+    saveVideo(next);
+    ui.set({ video: next });
+    if (differ(next, lensed, LENS)) {
+      post.dispose();
+      // the upscaler's jitter stays on the camera otherwise
+      camera.clearViewOffset();
+      post = lens(next);
+      lensed = next;
+    } else {
+      post.setScale(next.scale, next.dynamic);
+      post.target = budget(next.fps);
+    }
+    // (a change asked for while one compiles is picked up by the same settle's loop)
+    if (!settling && differ(next, dressed, DRESS)) settling = settle();
+    return settling ?? Promise.resolve();
+  }
+  ui.actions.video = (next) => void apply(next);
+
+  // --- finding what this machine holds: each preset in turn at 100%, every frame timed to the GPU's
+  // finish (so the display's rate doesn't hide the headroom), until one costs more than the budget
+  // (60 fps or the display's rate, whichever is slower, less a fifth for heavier places). The best
+  // that fit is kept, its scale raised while it still would (Ultra, to 200%), or Low's lowered. ---
+  let benching = false;
+  const gpu = renderer.backend as { device?: { queue: { onSubmittedWorkDone(): Promise<void> } } } & {
+    gl?: { finish(): void };
+  };
+  async function timeFrame() {
+    const t = performance.now();
+    tick(1 / 60, false);
+    post.pipe.render();
+    if (gpu.device) await gpu.device.queue.onSubmittedWorkDone();
+    else gpu.gl?.finish();
+    return performance.now() - t;
+  }
+  ui.actions.detect = async () => {
+    if (benching || settling) return;
+    benching = true;
+    ui.set({ detecting: true });
+    const keep = want,
+      goal = Math.max(refresh, 1000 / 60) * 0.8;
+    let best = -1,
+      bestMs = 0,
+      lowMs = 0;
+    try {
+      for (let p = 0; p < PRESET_NAMES.length; p++) {
+        ui.set({ detect: `Testing ${PRESET_NAMES[p]}…` });
+        await apply({ ...withPreset(keep, p), scale: 1, dynamic: false, fps: 0 });
+        // the first frames compile the lens and draw the shadow map: not counted
+        for (let i = 0; i < 12; i++) await timeFrame();
+        const ms: number[] = [];
+        for (let i = 0; i < 40; i++) ms.push(await timeFrame());
+        const m = ms.sort((a, b) => a - b)[ms.length >> 1];
+        if (p === 0) lowMs = m;
+        if (m > goal) break;
+        best = p;
+        bestMs = m;
+      }
+      // pixels go with the square of the scale; snapped down to 5%
+      const fit = (ms: number) => Math.floor(Math.sqrt(goal / ms) * 20) / 20;
+      const p = Math.max(0, best);
+      const scale =
+        best < 0
+          ? Math.max(SCALE_MIN, fit(lowMs))
+          : p === PRESET_NAMES.length - 1
+            ? Math.min(SCALE_MAX, Math.max(1, fit(bestMs)))
+            : 1;
+      await apply({ ...withPreset(keep, p), scale, dynamic: true, fps: keep.fps });
+      ui.set({
+        detect: `${PRESET_NAMES[p]} at ${Math.round(scale * 100)}%: ${(best < 0 ? lowMs : bestMs).toFixed(1)} ms a frame at 100%`,
+      });
+    } catch (e) {
+      console.error(e);
+      await apply(keep);
+      ui.set({ detect: "The test didn't finish: your settings are as they were." });
+    } finally {
+      benching = false;
+      ui.set({ detecting: false });
+    }
+  };
+
+  // --- the lobby: open when the page came from a link, or when someone asks for one. No name to
+  // choose yet: everyone is given one ---
   const me = {
-    name: localStorage.getItem("name") ?? "",
+    name: localStorage.getItem("name") || randomName(),
     seed: Number(localStorage.getItem("seed")) || randomSeed(),
   };
+  localStorage.setItem("name", me.name);
   localStorage.setItem("seed", String(me.seed));
   let lobby: Lobby | null = null;
   // who was here last time, to say in the feed who came and who went
@@ -233,30 +396,29 @@ async function boot() {
   }
   const linked = secretFromHash(location.hash);
   if (linked) void join(linked);
-
-  // --- menu and play ---
-  let playing = false;
-  const setPlaying = (on: boolean) => {
-    playing = on;
-    document.body.classList.toggle("playing", on);
-    ui.set({ phase: on ? "playing" : "menu", mapOpen: false });
-  };
-  ui.actions.enter = (name) => {
-    me.name = name;
-    localStorage.setItem("name", name);
-    lobby?.rename(me);
-    party();
-    // where pointer lock is refused (an embedded page), play anyway: drag to look, Esc for the menu
-    Promise.resolve(canvas.requestPointerLock()).catch(() => setPlaying(true));
-  };
   ui.actions.invite = () => void join(newSecret());
-  ui.actions.quality = (n) => {
-    localStorage.setItem("quality", String(n));
-    location.reload();
+
+  // --- menu and play: the camera moves to your shoulder, then the controls are yours ---
+  const phase = () => ui.get().phase;
+  const toMenu = () => {
+    stage.go(false);
+    document.body.classList.remove("playing");
+    ui.set({ phase: "menu", mapOpen: false });
   };
-  document.addEventListener("pointerlockchange", () => setPlaying(document.pointerLockElement === canvas));
+  ui.actions.enter = () => {
+    if (phase() !== "menu") return;
+    // where pointer lock is refused (an embedded page), play anyway: drag to look, Esc for the menu
+    Promise.resolve(canvas.requestPointerLock()).catch(() => {});
+    stage.go(true);
+    document.body.classList.add("playing");
+    ui.set({ phase: "entering", started: true });
+  };
+  document.addEventListener("pointerlockchange", () => {
+    if (!document.pointerLockElement && phase() !== "menu") toMenu();
+  });
   addEventListener("keydown", (e) => {
-    if (e.code === "Escape" && playing && !document.pointerLockElement) setPlaying(false);
+    const playing = phase() === "playing";
+    if (e.code === "Escape" && phase() !== "menu" && !document.pointerLockElement) toMenu();
     const i = Number(e.key) - 1;
     if (playing && i >= 0 && i < VIEWS.length) {
       const p = VIEWS[i];
@@ -267,21 +429,26 @@ async function boot() {
       lanternOn = !lanternOn;
       ui.note(lanternOn ? "Lantern lit" : "Lantern out", lanternOn ? "warm" : undefined);
     }
-    if (e.code === "Tab") {
-      // Tab would walk the focus through the page: here it opens the map
+    // in play, Tab would walk the focus through the page: there it opens the map
+    if (e.code === "Tab" && playing) {
       e.preventDefault();
-      if (playing && !e.repeat) {
+      if (!e.repeat) {
         ui.set({ mapOpen: !ui.get().mapOpen });
         marksT = 1;
       }
     }
   });
   addEventListener("resize", () => {
+    // a window hidden to nothing keeps its last size (a 0 px canvas is an invalid GPU texture)
+    if (!innerWidth || !innerHeight) return;
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight, false);
+    // the scale's ceiling depends on the window's size (post.ts)
+    post.setScale(want.scale, want.dynamic);
   });
   ui.set({ phase: "menu", progress: 1 });
+  stage.arrive();
 
   // --- area names, the way they appear when you cross into one ---
   const w = new Float32Array(NREG);
@@ -353,15 +520,28 @@ async function boot() {
   }
 
   let last = performance.now(),
+    due = 0,
     statT = 0,
     frames = 0,
     sendT = 0,
     marksT = 0,
     showStats = false;
   renderer.setAnimationLoop(() => {
+    // the detection test draws its own frames
+    if (benching) return;
     const now = performance.now();
+    // the frame-rate cap: display frames are skipped until the next is due (a little early, so a cap
+    // at the display's own rate keeps every frame); `due` keeps the average on the cap
+    if (want.fps) {
+      const gap = 1000 / want.fps;
+      if (now < due - 1.5) return;
+      due = Math.max(due, now - gap) + gap;
+    }
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
+    // the move into play has landed: the controls are yours
+    if (phase() === "entering" && stage.k >= 1) ui.set({ phase: "playing" });
+    const playing = phase() === "playing";
     tick(dt, playing);
     if (playing) {
       areaCheck();
@@ -376,6 +556,7 @@ async function boot() {
         if (poseAt(r, t, pose)) trails.walk(r.id, pose[0], pose[2], -pose[3], snowDepth(pose[0], pose[2]));
     }
     trails.update(dt, camera.position.x, camera.position.z, mood.u.snowfall.value);
+    // your body: in the menu's shot and over the shoulder, gone once the camera is behind your eyes
     wanderers.self(
       me.seed,
       player.pos.x,
@@ -383,7 +564,7 @@ async function boot() {
       player.pos.z,
       player.yaw,
       lanternOn,
-      player.behind > 0.3,
+      player.behind > 0.3 || stage.k < 0.75,
     );
     live();
     marksT += dt;
@@ -416,7 +597,22 @@ async function boot() {
   // a handle for poking at the running game from the dev tools (fixed poses, timings)
   if (import.meta.env.DEV)
     Object.assign(window, {
-      __game: { player, camera, mood, VIEWS, scene, post, renderer, wanderers, body, ui, trails },
+      __game: {
+        player,
+        camera,
+        mood,
+        VIEWS,
+        scene,
+        get post() {
+          return post;
+        },
+        renderer,
+        wanderers,
+        body,
+        ui,
+        trails,
+        stage,
+      },
     });
 }
 

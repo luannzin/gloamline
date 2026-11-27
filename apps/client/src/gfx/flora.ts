@@ -1,7 +1,7 @@
 // Everything that stands on the ground, drawn as instanced fields. Each frame a field keeps only the
 // instances in view (plus everything near enough to cast a shadow into view), splits them into near
 // and far detail, and uploads that list. Wind bends each shape by its `sway`.
-import { HALF, type Kind, SIZE, type World } from "@gloamline/world";
+import { HALF, type Kind, SIZE, type World } from "@zimovye/world";
 import {
   attribute,
   cameraPosition,
@@ -285,9 +285,10 @@ type Spec = {
   shadow: boolean;
 };
 
-export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number, models: Models) {
+/** `distance`: the view distance setting (video.ts), 0..3: how far each kind reaches and keeps detail */
+export function makeFlora(world: World, t: Tex, mood: MoodState, distance: number, models: Models) {
   const group = new THREE.Group();
-  const q = quality;
+  const q = distance;
   const bark =
     (tint: number, wind: number, moss: number): Part =>
     (s) =>
