@@ -5,6 +5,8 @@ import type { Vitals } from "./ui/store";
 
 export type Exposure = {
   running: boolean;
+  /** how deep the snow is underfoot (0..1): running through it costs more */
+  deep: number;
   /** 1 under the open sky, 0 under rock */
   open: number;
   /** how hard the snow is blowing here (the mood's snowfall, 0..1) */
@@ -29,7 +31,7 @@ export function makeBody() {
     /** Returns true when the body gives out. */
     update(dt: number, e: Exposure) {
       if (e.running) {
-        v.stamina = clamp(v.stamina - 0.14 * dt);
+        v.stamina = clamp(v.stamina - 0.14 * (1 + 0.7 * e.deep) * dt);
         rested = 0;
         if (v.stamina === 0) spent = true;
       } else {

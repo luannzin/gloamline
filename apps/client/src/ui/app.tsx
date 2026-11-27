@@ -181,6 +181,10 @@ function Menu() {
           <dd className="m-0">
             <Kbd>F</Kbd> <span className="text-frost-muted">keeps you warm</span>
           </dd>
+          <dt>View</dt>
+          <dd className="m-0">
+            <Kbd>V</Kbd> <span className="text-frost-muted">over the shoulder</span>
+          </dd>
           <dt>Map</dt>
           <dd className="m-0">
             <Kbd>Tab</Kbd>

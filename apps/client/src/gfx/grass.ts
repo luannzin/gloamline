@@ -35,6 +35,7 @@ import * as THREE from "three/webgpu";
 import type { MoodState } from "./mood";
 import { fieldTint } from "./terrain";
 import type { GroundTex } from "./textures";
+import type { Trails } from "./trails";
 
 const ROWS = 5;
 /** the clump lattice's turn off the world axes */
@@ -80,7 +81,13 @@ function clump(BLADES: number) {
   return g;
 }
 
-export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState, quality: number) {
+export function makeGrass(
+  tex: GroundTex,
+  detail: THREE.Texture,
+  mood: MoodState,
+  quality: number,
+  trails: Trails,
+) {
   const side = [0, 128, 220, 290][quality],
     step = [0, 0.34, 0.27, 0.25][quality];
   const reach = side * step * 0.5;
@@ -173,6 +180,12 @@ export function makeGrass(tex: GroundTex, detail: THREE.Texture, mood: MoodState
     .mul(flower.mul(0.35).add(1))
     // the snow's depth hides the bottom of every blade
     .mul(float(1).sub(mood.u.snow.mul(0.3)))
+    // and where someone has walked, it lies trodden flat (trails.ts)
+    .mul(
+      float(1).sub(
+        texture(trails.texture, vec2(cx, cz).sub(trails.origin).div(trails.span)).level(float(0)).r.mul(0.85),
+      ),
+    )
     .mul(shown);
   // the wind has combed the field: most blades lean its way, a few any way
   const az = mix(

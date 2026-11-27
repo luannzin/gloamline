@@ -31,7 +31,9 @@ import {
 import * as THREE from "three/webgpu";
 import type { MoodState } from "./mood";
 import type { GroundTex } from "./textures";
+import type { Trails } from "./trails";
 
+type Node1 = THREE.Node<"float">;
 type Node2 = THREE.Node<"vec2">;
 type Node4 = THREE.Node<"vec4">;
 
@@ -86,7 +88,13 @@ function grid(seg: number) {
   return g;
 }
 
-export function makeTerrain(tex: GroundTex, detail: THREE.Texture, mood: MoodState, quality: number) {
+export function makeTerrain(
+  tex: GroundTex,
+  detail: THREE.Texture,
+  mood: MoodState,
+  quality: number,
+  trails: Trails,
+) {
   const group = new THREE.Group();
   // a march along the sun over the height texture, with a penumbra that widens with distance
   const far = Fn(() => {
@@ -146,7 +154,7 @@ export function makeTerrain(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
       const h = textureLoad(tex.height, ij).x;
       return vec3(wx, h.sub(positionLocal.y.mul(step * 3 + 2)), wz);
     })();
-    const shade = groundShade(tex, detail, mood);
+    const shade = groundShade(tex, detail, mood, trails);
     m.colorNode = shade.color;
     m.normalNode = shade.normal;
     m.roughnessNode = shade.rough;
@@ -202,7 +210,7 @@ export function makeTerrain(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
 }
 
 /** Albedo, normal (view space) and roughness of the ground at positionWorld. */
-export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodState) {
+export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodState, trails?: Trails) {
   const wp = positionWorld;
   const uv = wp.xz.add(HALF + 0.5).div(SIZE);
   const g0 = texture(tex.ground0, uv),
@@ -364,17 +372,41 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
     vec3(0.075, 0.064, 0.05),
     smoothstep(0.45, 0.7, C.z.add(B.y.mul(0.4))),
   );
+  // (a stone under the snow is a white bump, not a hole: only the biggest show their tops)
   const cover = snow
-    .mul(float(1).sub(peb.mul(0.8).mul(float(1).sub(rd))))
+    .mul(float(1).sub(peb.mul(0.3).mul(float(1).sub(rd))))
     .mul(float(1).sub(channel.mul(0.5)))
     .toVar();
+  // trails (trails.ts): a trench about 25 cm deep at its deepest, its floor packed and in shadow, its
+  // walls lit by the slope, a rim of snow pushed up beside it. Only where the snow lies.
+  let trail: Node1 = float(0),
+    rim: Node1 = float(0),
+    trailN: THREE.Node<"vec3"> = vec3(0, 0, 0);
+  if (trails) {
+    const tuv = wp.xz.sub(trails.origin).div(trails.span);
+    const edge = smoothstep(0, 0.05, tuv.x)
+      .mul(smoothstep(1, 0.95, tuv.x))
+      .mul(smoothstep(0, 0.05, tuv.y))
+      .mul(smoothstep(1, 0.95, tuv.y));
+    const te = 1 / 512;
+    const T = (dx: number, dz: number) => texture(trails.texture, tuv.add(vec2(dx * te, dz * te))).r;
+    const d0 = T(0, 0);
+    const k = cover.mul(edge).toVar();
+    trail = d0.mul(k);
+    rim = T(3, 0).add(T(-3, 0)).add(T(0, 3)).add(T(0, -3)).mul(0.25).sub(d0).max(0).mul(k);
+    // depth 0.3 m over two texels (2 x 9.4 cm): the slope of the trench's walls, a little steeper
+    // than true so it reads from a standing eye
+    trailN = vec3(T(1, 0).sub(T(-1, 0)), 0, T(0, 1).sub(T(0, -1))).mul(k.mul(2.6));
+  }
   const albedo = mix(
     mix(
       mix(mix(ground, rock, rk), road, rd.mul(float(1).sub(rk.mul(0.7)))),
       pebble.mul(channel.mul(-0.35).add(1)),
       peb,
     ),
-    mix(fresh, slush, rd.mul(float(1).sub(rk))),
+    mix(fresh, slush, rd.mul(float(1).sub(rk)))
+      .mul(mix(vec3(1, 1, 1), vec3(0.48, 0.53, 0.64), trail))
+      .mul(rim.mul(0.4).add(1)),
     cover,
   ).mul(shade);
   // detail normal: the ground's slope from the top projection, the rock's from the side ones
@@ -420,7 +452,8 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
           .mul(float(1).sub(cover.mul(0.8))),
       )
       .add(side.mul(float(1).sub(cover)))
-      .add(vec3(dB.x.negate(), 0, dB.y.negate()).mul(cover.mul(2.5))),
+      .add(vec3(dB.x.negate(), 0, dB.y.negate()).mul(cover.mul(2.5)))
+      .add(trailN),
   );
   const rough = mix(
     mix(
@@ -428,7 +461,8 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
       float(0.25),
       wet.mul(g0.y).max(channel.mul(0.45)),
     ),
-    mix(float(0.62), float(0.4), rd),
+    // packed snow in the trails has a little sheen
+    mix(float(0.62), float(0.4), rd.max(trail)),
     cover,
   );
   // soil settles dark in the gaps between stones and under the litter
@@ -437,9 +471,11 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
       float(1)
         .sub(smoothstep(0.0, 0.3, ph))
         .mul(pebArea)
-        .mul(0.5),
+        .mul(0.5)
+        .mul(float(1).sub(cover)),
     )
-    .mul(C.y.mul(0.3).add(0.75));
+    .mul(mix(C.y.mul(0.3).add(0.75), float(1), cover.mul(0.7)))
+    .mul(float(1).sub(trail.mul(0.35)));
   return { color: albedo, normal: transformNormalToView(n), rough, ao };
 }
 

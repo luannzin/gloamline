@@ -57,12 +57,16 @@ function index(w: World): Obstacles {
   return { circles, cells };
 }
 
-/** `canRun`: whether the body has the breath for it (body.ts). */
+/**
+ * `canRun`: whether the body has the breath for it (body.ts); `footing`: how deep the snow is
+ * underfoot, 0..1 (it slows the walk to a trudge).
+ */
 export function makePlayer(
   world: World,
   camera: THREE.PerspectiveCamera,
   dom: HTMLElement,
   canRun: () => boolean,
+  footing: () => number,
 ) {
   const obs = index(world);
   const pos = new THREE.Vector3(world.spawn[0], world.spawn[1], world.spawn[2]);
@@ -73,7 +77,10 @@ export function makePlayer(
     fly = false,
     running = false,
     bob = 0,
-    breath = 0;
+    breath = 0,
+    // the view: 0 through your own eyes, 1 over your shoulder (V), eased between
+    behind = 0,
+    wantBehind = false;
   const keys = new Set<string>();
   // the ruins' solid stones and the village's walls (world: index.ts)
   const B = world.solid;
@@ -81,6 +88,7 @@ export function makePlayer(
   addEventListener("keydown", (e) => {
     keys.add(e.code);
     if (e.code === "KeyV" && e.shiftKey) fly = !fly;
+    else if (e.code === "KeyV" && !e.repeat) wantBehind = !wantBehind;
   });
   addEventListener("keyup", (e) => keys.delete(e.code));
   addEventListener("blur", () => keys.clear());
@@ -212,7 +220,11 @@ export function makePlayer(
   }
 
   const fwd = new THREE.Vector3(),
-    right = new THREE.Vector3();
+    right = new THREE.Vector3(),
+    head = new THREE.Vector3(),
+    look = new THREE.Vector3(),
+    eye = new THREE.Vector3();
+  let deep = 0;
   function update(dt: number, active: boolean) {
     const k = (c: string) => (active && keys.has(c) ? 1 : 0);
     fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
@@ -227,7 +239,9 @@ export function makePlayer(
       vel.set(0, 0, 0);
     } else {
       const wet = pos.y < WATER_Y - 0.4;
-      const speed = (run ? 7.2 : 4.2) * (wet ? 0.6 : 1);
+      // deep snow takes a third of the pace; a trodden trail or a road gives it back
+      deep += ((onGround ? footing() : deep) - deep) * Math.min(1, dt * 4);
+      const speed = (run ? 7.2 : 4.2) * (wet ? 0.6 : 1) * (1 - 0.36 * deep);
       const len = Math.hypot(mx, mz) || 1;
       const wx = ((fwd.x * mz + right.x * mx) / len) * speed,
         wz = ((fwd.z * mz + right.z * mx) / len) * speed;
@@ -256,18 +270,41 @@ export function makePlayer(
       pos.x = Math.max(-HALF + 40, Math.min(HALF - 40, pos.x));
       pos.z = Math.max(-HALF + 40, Math.min(HALF - 40, pos.z));
       const moving = Math.hypot(vel.x, vel.z);
-      if (onGround && moving > 0.5) bob += dt * moving * 2.1;
-      running = !!run && moving > 5;
+      // in deep snow each step is a high, slow one
+      if (onGround && moving > 0.5) bob += dt * moving * 2.1 * (1 + 0.5 * deep);
+      running = !!run && moving > 4.2;
     }
     breath += dt;
-    // a body breathing and walking: two slow sines and the step bob
-    const by = Math.abs(Math.sin(bob)) * 0.05 + Math.sin(breath * 1.3) * 0.008;
-    const bx = Math.cos(bob) * 0.025;
-    camera.position.set(pos.x + right.x * bx, pos.y + EYE + by, pos.z + right.z * bx);
+    // a body breathing and walking: two slow sines and the step bob, bigger when trudging
+    const by = Math.abs(Math.sin(bob)) * 0.05 * (1 + 0.8 * deep) + Math.sin(breath * 1.3) * 0.008;
+    const bx = Math.cos(bob) * 0.025 * (1 + 0.6 * deep);
+    head.set(pos.x + right.x * bx, pos.y + EYE + by, pos.z + right.z * bx);
+    // over the shoulder: back along the look, a little right and up, pulled in where the ground
+    // would come between
+    behind += ((wantBehind ? 1 : 0) - behind) * Math.min(1, dt * 7);
+    const e = behind * behind * (3 - 2 * behind);
+    if (e > 0.001) {
+      look.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
+      let reach = 3.4;
+      for (let s = 1; s <= 6; s++) {
+        const d = (reach * s) / 6;
+        eye
+          .copy(head)
+          .addScaledVector(look, -d)
+          .addScaledVector(right, 0.55 * (s / 6));
+        if (eye.y < heightAt(world.ground.height, eye.x, eye.z) + 0.35) {
+          reach = Math.max(0.6, d - 0.6);
+          break;
+        }
+      }
+      eye.copy(head).addScaledVector(look, -reach).addScaledVector(right, 0.55);
+      eye.y += 0.15;
+      camera.position.lerpVectors(head, eye, e);
+    } else camera.position.copy(head);
     camera.rotation.set(
       pitch + Math.sin(breath * 0.9) * 0.002,
       yaw + Math.sin(breath * 0.63) * 0.002,
-      Math.cos(bob) * 0.004,
+      Math.cos(bob) * 0.004 * (1 - e),
       "YXZ",
     );
   }
@@ -288,6 +325,13 @@ export function makePlayer(
     },
     get running() {
       return running && !fly;
+    },
+    get grounded() {
+      return onGround && !fly;
+    },
+    /** 0 first person .. 1 over the shoulder */
+    get behind() {
+      return behind;
     },
   };
 }

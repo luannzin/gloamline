@@ -18,6 +18,7 @@ import { makeCave, makeRuins } from "./gfx/stone";
 import { makeTerrain } from "./gfx/terrain";
 import { detailTexture, foliageAtlas, groundTextures } from "./gfx/textures";
 import { makeTowers } from "./gfx/towers";
+import { makeTrails } from "./gfx/trails";
 import { makeVillage } from "./gfx/village";
 import { makeWanderers } from "./gfx/wanderers";
 import { makeWater } from "./gfx/water";
@@ -116,9 +117,10 @@ async function boot() {
     }
     scene.environmentIntensity = mood.envIntensity;
   };
-  const terrain = makeTerrain(tex, detail, mood, q);
+  const trails = makeTrails();
+  const terrain = makeTerrain(tex, detail, mood, q, trails);
   const flora = makeFlora(world, { ground0: tex.ground0, detail, atlas }, mood, q, models);
-  const grass = q > 0 ? makeGrass(tex, detail, mood, q) : null;
+  const grass = q > 0 ? makeGrass(tex, detail, mood, q, trails) : null;
   const particles = makeParticles(tex.height, mood, q);
   const wanderers = makeWanderers(camera, document.getElementById("tags")!, models);
   scene.add(
@@ -140,8 +142,27 @@ async function boot() {
   scene.add(lantern);
   let lanternOn = false;
 
+  // how deep the snow is under (x, z), 0..1: the mood's snow on ground that's near level, none on
+  // the roads (trodden) or under the mine's rock. The shader's patches aren't counted: close enough.
+  const G1 = world.ground.ground1;
+  function snowDepth(x: number, z: number) {
+    const i = Math.min(SIZE - 1, Math.max(0, Math.round(x + HALF))),
+      j = Math.min(SIZE - 1, Math.max(0, Math.round(z + HALF))),
+      o = (j * SIZE + i) * 4;
+    const nx = G1[o + 2] / 127.5 - 1,
+      nz = G1[o + 3] / 127.5 - 1;
+    const ny = Math.sqrt(Math.max(0, 1 - nx * nx - nz * nz));
+    const flat = Math.min(1, Math.max(0, (ny - 0.75) / 0.17));
+    return mood.u.snow.value * mood.u.open.value * flat * (1 - G1[o + 1] / 255);
+  }
   const body = makeBody();
-  const player = makePlayer(world, camera, canvas, () => body.canRun);
+  const player = makePlayer(
+    world,
+    camera,
+    canvas,
+    () => body.canRun,
+    () => snowDepth(player.pos.x, player.pos.z),
+  );
   const post = makePost(renderer, scene, camera, mood, q);
   post.target = Math.max(1000 / 240, refresh);
 
@@ -162,7 +183,9 @@ async function boot() {
       camera.position.y - 0.35,
       camera.position.z - Math.cos(player.yaw) * 0.4,
     );
-    lantern.intensity += ((lanternOn ? 9 : 0) - lantern.intensity) * Math.min(1, dt * 6);
+    // (over the shoulder, the lantern in the body's hand lights the way instead: wanderers.ts)
+    lantern.intensity +=
+      ((lanternOn ? 9 * (1 - player.behind) : 0) - lantern.intensity) * Math.min(1, dt * 6);
   };
   tick(0, false);
   await renderer.compileAsync(scene, camera);
@@ -184,7 +207,11 @@ async function boot() {
       now.set(r.id, r.name || "A survivor");
       if (!known.has(r.id)) ui.note(`${r.name || "A survivor"} found you`, "warm");
     }
-    for (const [id, name] of known) if (!now.has(id)) ui.note(`${name} is gone`, "cold");
+    for (const [id, name] of known)
+      if (!now.has(id)) {
+        ui.note(`${name} is gone`, "cold");
+        trails.forget(id);
+      }
     known = now;
     ui.set({ party: list });
   };
@@ -297,6 +324,7 @@ async function boot() {
   function vitals(dt: number) {
     const down = body.update(dt, {
       running: player.running,
+      deep: snowDepth(player.pos.x, player.pos.z),
       open: mood.u.open.value,
       cold: mood.u.snowfall.value,
       lantern: lanternOn,
@@ -339,6 +367,24 @@ async function boot() {
       areaCheck();
       vitals(dt);
     }
+    // everyone's feet in the snow (trails.ts), remote ones where they're drawn: 100 ms ago
+    if (player.grounded)
+      trails.walk("me", player.pos.x, player.pos.z, -player.yaw, snowDepth(player.pos.x, player.pos.z));
+    if (lobby) {
+      const t = performance.now() - 100;
+      for (const r of lobby.people.values())
+        if (poseAt(r, t, pose)) trails.walk(r.id, pose[0], pose[2], -pose[3], snowDepth(pose[0], pose[2]));
+    }
+    trails.update(dt, camera.position.x, camera.position.z, mood.u.snowfall.value);
+    wanderers.self(
+      me.seed,
+      player.pos.x,
+      player.pos.y,
+      player.pos.z,
+      player.yaw,
+      lanternOn,
+      player.behind > 0.3,
+    );
     live();
     marksT += dt;
     if (marksT > 0.1) {
@@ -370,7 +416,7 @@ async function boot() {
   // a handle for poking at the running game from the dev tools (fixed poses, timings)
   if (import.meta.env.DEV)
     Object.assign(window, {
-      __game: { player, camera, mood, VIEWS, scene, post, renderer, wanderers, body, ui },
+      __game: { player, camera, mood, VIEWS, scene, post, renderer, wanderers, body, ui, trails },
     });
 }
 

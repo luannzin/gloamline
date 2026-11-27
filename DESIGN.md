@@ -99,4 +99,12 @@ the corners and fades out when it has nothing to say.
 ## Controls
 
 Look: mouse. Move: `W` `A` `S` `D`. Run: `Shift` (uses stamina). Jump: `Space`. Lantern: `F` (warms you,
-slowly). Map: `Tab`. Menu: `Esc`. Viewpoints: `1` to `9`. Stats: `H`.
+slowly). View: `V` (first person, or over the shoulder). Map: `Tab`. Menu: `Esc`. Viewpoints: `1` to
+`9`. Stats: `H`.
+
+## Deep snow
+
+Snow that lies thick enough slows a walk to a trudge (a third of the pace, a higher, slower step) and
+makes running cost more breath. Everyone's feet leave a trail in it: a trench ploughed where the body
+went, a print at each step, a rim of snow pushed aside, the reeds in it trodden flat. Roads and
+trodden trails are firm. Falling snow fills old tracks back in over a few minutes.

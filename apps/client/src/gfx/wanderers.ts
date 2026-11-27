@@ -100,6 +100,45 @@ export function makeWanderers(camera: THREE.Camera, tags: HTMLElement, models: M
     return f;
   }
 
+  /** Puts `f` at `o` (x, y, z, yaw, lantern) and walks it at the speed it moved there. */
+  function drive(f: Figure, dt: number) {
+    // speed along the ground, eased, drives the stride
+    const sp = Number.isNaN(f.last.x) ? 0 : Math.hypot(o[0] - f.last.x, o[2] - f.last.z) / dt;
+    f.last.set(o[0], o[1], o[2]);
+    const s = f.u.speed;
+    s.value += (Math.min(sp / 4.2, 1.7) - s.value) * Math.min(1, dt * 8);
+    f.u.phase.value += dt * (2.2 + s.value * 5.5) * Math.min(1, s.value * 3);
+    f.root.position.set(o[0], o[1], o[2]);
+    f.root.rotation.y = o[3];
+    const lit = o[4] > 0.5;
+    f.light.intensity += ((lit ? 9 : 0) - f.light.intensity) * 0.15;
+    f.u.lit.value += ((lit ? 1 : 0) - f.u.lit.value) * 0.15;
+  }
+
+  let selfT = performance.now();
+  /** Your own body, drawn only when the camera is behind it (third person); no name over it. */
+  function self(seed: number, x: number, y: number, z: number, yaw: number, lit: boolean, show: boolean) {
+    let f = figures.get("me");
+    if (!f) {
+      f = figure({ id: "me", name: "", seed, poses: [] });
+      f.tag.remove();
+    }
+    f.root.visible = show;
+    if (!show) {
+      f.last.x = Number.NaN;
+      return;
+    }
+    const t = performance.now(),
+      dt = Math.max(0.001, (t - selfT) / 1000);
+    selfT = t;
+    o[0] = x;
+    o[1] = y;
+    o[2] = z;
+    o[3] = yaw;
+    o[4] = lit ? 1 : 0;
+    drive(f, dt);
+  }
+
   let lastT = performance.now();
   function update(people: Map<string, Remote>) {
     const t = performance.now(),
@@ -107,7 +146,7 @@ export function makeWanderers(camera: THREE.Camera, tags: HTMLElement, models: M
     lastT = t;
     const now = t - 100;
     for (const [id, f] of figures)
-      if (!people.has(id)) {
+      if (id !== "me" && !people.has(id)) {
         group.remove(f.root);
         f.tag.remove();
         figures.delete(id);
@@ -115,17 +154,7 @@ export function makeWanderers(camera: THREE.Camera, tags: HTMLElement, models: M
     for (const r of people.values()) {
       if (!poseAt(r, now, o)) continue;
       const f = figures.get(r.id) ?? figure(r);
-      // speed along the ground, eased, drives the stride
-      const sp = Number.isNaN(f.last.x) ? 0 : Math.hypot(o[0] - f.last.x, o[2] - f.last.z) / dt;
-      f.last.set(o[0], o[1], o[2]);
-      const s = f.u.speed;
-      s.value += (Math.min(sp / 4.2, 1.7) - s.value) * Math.min(1, dt * 8);
-      f.u.phase.value += dt * (2.2 + s.value * 5.5) * Math.min(1, s.value * 3);
-      f.root.position.set(o[0], o[1], o[2]);
-      f.root.rotation.y = o[3];
-      const lit = o[4] > 0.5;
-      f.light.intensity += ((lit ? 9 : 0) - f.light.intensity) * 0.15;
-      f.u.lit.value += ((lit ? 1 : 0) - f.u.lit.value) * 0.15;
+      drive(f, dt);
       // the name, above the hood, while in front and within 160 m (fading over the last 40)
       v.set(o[0], o[1] + 2.15, o[2]).project(camera);
       const d = Math.hypot(o[0] - camera.position.x, o[2] - camera.position.z);
@@ -136,5 +165,5 @@ export function makeWanderers(camera: THREE.Camera, tags: HTMLElement, models: M
       f.tag.style.transform = `translate(calc(${((v.x + 1) / 2) * innerWidth}px - 50%), ${((1 - v.y) / 2) * innerHeight}px)`;
     }
   }
-  return { group, update };
+  return { group, update, self };
 }

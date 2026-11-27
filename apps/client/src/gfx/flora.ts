@@ -357,14 +357,7 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, quality: number
         far: [[model(models, `dead${i}_bark_lod1`), bark(0x4c4640, 0.12, 0.35)]],
       })),
     },
-    {
-      kind: "fern",
-      reach: q > 1 ? 75 : 50,
-      lodAt: Infinity,
-      radius: 1.5,
-      shadow: false,
-      variants: range(2).map((i) => ({ near: [[S.fern(400 + i), leaf(0x9a6436, 0x7e6a48, 0.12)]] })),
-    },
+    // (no ferns: the winter has laid them flat under the snow; the world still places them)
     {
       kind: "reed",
       reach: q > 1 ? 90 : 60,
