@@ -28,6 +28,7 @@ import {
   vec4,
 } from "three/tsl";
 import * as THREE from "three/webgpu";
+import type { Wind } from "./wind";
 
 type Node3 = THREE.Node<"vec3">;
 type Node1 = THREE.Node<"float">;
@@ -110,8 +111,8 @@ const MOODS: Mood[] = [
     embers: 0,
     dust: 0.15,
     snow: 0.9,
-    snowfall: 0.7,
-    ash: 0.15,
+    snowfall: 0.85,
+    ash: 0.04,
   },
   {
     // Gniloye: moonlight on the ice through a tear in the cloud, white mist lying on the marsh
@@ -144,7 +145,7 @@ const MOODS: Mood[] = [
     embers: 0,
     dust: 0.05,
     snow: 0.95,
-    snowfall: 0.35,
+    snowfall: 0.5,
     ash: 0,
   },
   {
@@ -177,7 +178,7 @@ const MOODS: Mood[] = [
     embers: 1,
     dust: 0.3,
     snow: 0.5,
-    snowfall: 0.2,
+    snowfall: 0.3,
     ash: 0.85,
   },
   {
@@ -243,8 +244,8 @@ const MOODS: Mood[] = [
     embers: 0,
     dust: 0.1,
     snow: 0.95,
-    snowfall: 0.5,
-    ash: 0.1,
+    snowfall: 0.75,
+    ash: 0.03,
   },
 ];
 // under the mine's rock: dark, the shafts and the glowing caps do the lighting
@@ -304,6 +305,7 @@ export function makeMood(
   detail: THREE.Texture,
   shadows: number,
   skyLight: boolean,
+  wind: Wind,
 ) {
   const cu = () => uniform(new THREE.Color()),
     fu = () => uniform(0);
@@ -490,9 +492,22 @@ export function makeMood(
     const p1 = texture(detail, wp.xz.div(310).add(drift)).x,
       p2 = texture(detail, wp.xz.div(83).sub(drift.mul(1.7))).y;
     const patch = smoothstep(0.3, 0.75, p1.add(p2.mul(0.45)).sub(0.12));
+    // the snow in the air itself: in a blizzard the near air is white, thickest in the gusts, in
+    // sheets that the wind carries past (the specks are only the nearest of it)
+    const carried = wp.xz.sub(wind.u.travel);
+    const sheet = texture(detail, carried.div(70))
+      .x.mul(0.7)
+      .add(texture(detail, carried.div(19)).y.mul(0.5));
+    const veil = u.snowfall
+      .mul(u.snowfall)
+      .mul(u.open)
+      .mul(smoothstep(0.45, 1.0, sheet).mul(0.9).add(0.25))
+      .mul(0.011)
+      .mul(min(d, 260));
     const amount = layer(u.fogDensity, u.fogBase, u.fogFalloff)
       .mul(p1.mul(0.5).add(0.75))
-      .add(layer(u.mist, u.mistBase, u.mistFalloff).mul(patch.mul(1.6).add(0.15)));
+      .add(layer(u.mist, u.mistBase, u.mistFalloff).mul(patch.mul(1.6).add(0.15)))
+      .add(veil);
     // (plus a thin uniform haze, so a ridge a kilometre off is softened, not erased)
     const k = float(1).sub(exp(amount.add(d.mul(0.00012)).negate()));
     const mu = max(dot(rd, u.sunDir), 0);

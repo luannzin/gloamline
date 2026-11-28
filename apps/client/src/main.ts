@@ -12,8 +12,10 @@ import { makeFlora } from "./gfx/flora";
 import { makeGrass } from "./gfx/grass";
 import { loadModels } from "./gfx/models";
 import { makeMood } from "./gfx/mood";
+import { overlay } from "./gfx/overlay";
 import { makeParticles } from "./gfx/particles";
 import { makePost } from "./gfx/post";
+import { makePuffs } from "./gfx/puffs";
 import { makeCave, makeRuins } from "./gfx/stone";
 import { makeTerrain } from "./gfx/terrain";
 import { detailTexture, foliageAtlas, groundTextures } from "./gfx/textures";
@@ -22,6 +24,7 @@ import { makeTrails } from "./gfx/trails";
 import { makeVillage } from "./gfx/village";
 import { makeWanderers } from "./gfx/wanderers";
 import { makeWater } from "./gfx/water";
+import { makeWind } from "./gfx/wind";
 import { drawMap, toMap } from "./map";
 import { type Lobby, newSecret, openLobby, poseAt, secretFromHash } from "./net";
 import { makePlayer } from "./player";
@@ -29,8 +32,8 @@ import { makeStage } from "./stage";
 import { mountUI } from "./ui/mount";
 import { type Mark, type Person, ui } from "./ui/store";
 import {
-  DRESS,
   type Details,
+  DRESS,
   differ,
   LENS,
   loadVideo,
@@ -82,6 +85,8 @@ async function boot() {
   renderer.setSize(innerWidth, innerHeight, false);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  // cleared to nothing: the overlay's pass (gfx/overlay.ts) is composited by how much it covers
+  renderer.setClearColor(0x000000, 0);
   const backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? "WebGPU" : "WebGL 2";
 
   // the display's refresh, measured while the workers build: dynamic resolution holds this rate
@@ -117,10 +122,14 @@ async function boot() {
   const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 3200);
   const tex = groundTextures(world);
   const detail = detailTexture();
-  const mood = makeMood(land, world, detail, want.shadows, want.sky > 0);
+  const wind = makeWind();
+  const mood = makeMood(land, world, detail, want.shadows, want.sky > 0, wind);
   scene.add(mood.sun, mood.sun.target, mood.hemi, mood.dome);
   scene.fogNode = mood.fogNode;
   const trails = makeTrails();
+  const puffs = makePuffs(mood, wind);
+  overlay.add(puffs.mesh);
+  overlay.fogNode = mood.fogNode;
   const wanderers = makeWanderers(camera, document.getElementById("tags")!, models);
   scene.add(
     makeRuins(world, detail),
@@ -137,14 +146,13 @@ async function boot() {
   const shared = new Set<THREE.BufferGeometry>(models.values());
   function dress(v: Details) {
     const atlas = foliageAtlas(v.textures > 0 ? 1024 : 512);
-    const terrain = makeTerrain(tex, detail, mood, v.shadows, trails);
+    const terrain = makeTerrain(tex, detail, mood, v.shadows, trails, v.distance);
     const flora = makeFlora(world, { ground0: tex.ground0, detail, atlas }, mood, v.distance, models);
     const grass = v.grass > 0 ? makeGrass(tex, detail, mood, v.grass, trails) : null;
-    const particles = makeParticles(tex.height, mood, v.effects);
+    const particles = makeParticles(tex.height, mood, wind, v.effects);
     const group = new THREE.Group().add(
       terrain.group,
       flora.group,
-      particles.group,
       makeWater(tex.height, detail, mood, v.reflections),
     );
     if (grass) group.add(grass.mesh);
@@ -153,6 +161,8 @@ async function boot() {
     let envRT: THREE.RenderTarget | null = null;
     return {
       group,
+      /** the specks, drawn over the settled image (overlay.ts) */
+      fx: particles.group,
       sky() {
         if (pmrem && mood.envDue()) {
           envRT = pmrem.fromScene(mood.skyScene, 0, 1, 3000, { size: 256, renderTarget: envRT as never });
@@ -166,16 +176,18 @@ async function boot() {
         camera.updateMatrixWorld();
         flora.update(camera);
         grass?.update(camera.position);
-        particles.update(camera);
+        particles.update(camera, canvas.height);
       },
       dispose() {
         scene.remove(group);
-        group.traverse((o) => {
-          const m = o as THREE.Mesh;
-          if (!m.isMesh) return;
-          if (!shared.has(m.geometry)) m.geometry.dispose();
-          (m.material as THREE.Material).dispose();
-        });
+        overlay.remove(particles.group);
+        for (const g of [group, particles.group])
+          g.traverse((o) => {
+            const m = o as THREE.Mesh;
+            if (!m.isMesh) return;
+            if (!shared.has(m.geometry)) m.geometry.dispose();
+            (m.material as THREE.Material).dispose();
+          });
         atlas.dispose();
         envRT?.dispose();
         pmrem?.dispose();
@@ -196,6 +208,7 @@ async function boot() {
     post = lens(want),
     lensed = want;
   scene.add(d.group);
+  overlay.add(d.fx);
 
   // the lantern: warm, short, on F; lit to begin with, the warmest thing in the menu's shot
   const lantern = new THREE.PointLight(0xffb066, 0, 16, 1.6);
@@ -215,13 +228,24 @@ async function boot() {
     const flat = Math.min(1, Math.max(0, (ny - 0.75) / 0.17));
     return mood.u.snow.value * mood.u.open.value * flat * (1 - G1[o + 1] / 255);
   }
+  /**
+   * How much fresh snow is in the way at (x, z), 0..1: the depth, less what's already pressed there
+   * (a trench someone ploughed is firm going: trails.ts).
+   */
+  function fresh(x: number, z: number) {
+    const d = snowDepth(x, z);
+    if (d < 0.01) return 0;
+    return d * (1 - 0.85 * Math.min(1, trails.depthAt(x, z) / (d * 0.36)));
+  }
   const body = makeBody();
   const player = makePlayer(
     world,
     camera,
     canvas,
     () => body.canRun,
-    () => snowDepth(player.pos.x, player.pos.z),
+    // a stride ahead, where the next step goes
+    (dx, dz) => fresh(player.pos.x + dx * 0.6, player.pos.z + dz * 0.6),
+    () => trails.depthAt(player.pos.x, player.pos.z),
   );
   const stage = makeStage(camera, (x, z) => heightAt(world.ground.height, x, z));
 
@@ -231,6 +255,7 @@ async function boot() {
     player.update(dt, active);
     stage.update(dt, player.pos.x, player.pos.y, player.pos.z, player.yaw);
     mood.update(camera.position, dt);
+    wind.update(dt, mood.u.snowfall.value);
     d.sky();
     d.update();
     post.frame();
@@ -245,6 +270,7 @@ async function boot() {
   };
   tick(0, false);
   await renderer.compileAsync(scene, camera);
+  await renderer.compileAsync(overlay, camera);
 
   // --- the settings take effect as they change. The scale, dynamic resolution and the cap apply at
   // once; a lens detail rebuilds the lens at once; a world detail builds a new dressing and compiles
@@ -258,11 +284,13 @@ async function boot() {
         const next = dress(v);
         next.update();
         await renderer.compileAsync(next.group, camera, scene);
+        await renderer.compileAsync(next.fx, camera, overlay);
         d.dispose();
         mood.configure(v.shadows, v.sky > 0);
         d = next;
         dressed = v;
         scene.add(d.group);
+        overlay.add(d.fx);
       }
     } finally {
       settling = null;
@@ -491,7 +519,7 @@ async function boot() {
   function vitals(dt: number) {
     const down = body.update(dt, {
       running: player.running,
-      deep: snowDepth(player.pos.x, player.pos.z),
+      deep: player.deep,
       open: mood.u.open.value,
       cold: mood.u.snowfall.value,
       lantern: lanternOn,
@@ -518,6 +546,17 @@ async function boot() {
       ui.set({ vitals: { ...b } });
     }
   }
+
+  /** Someone's feet at (x, z) facing `heading`: the trail, and snow kicked up at each print. */
+  function step(id: string, x: number, z: number, heading: number, hard: number) {
+    const depth = snowDepth(x, z);
+    if (!trails.walk(id, x, z, heading, depth) || depth < 0.25) return;
+    const px = trails.print[0],
+      pz = trails.print[1];
+    const y = heightAt(world.ground.height, px, pz) - trails.depthAt(px, pz) * 0.6;
+    puffs.kick(px, y, pz, Math.sin(heading), -Math.cos(heading), depth, hard);
+  }
+  let breathT = 1;
 
   let last = performance.now(),
     due = 0,
@@ -547,20 +586,37 @@ async function boot() {
       areaCheck();
       vitals(dt);
     }
-    // everyone's feet in the snow (trails.ts), remote ones where they're drawn: 100 ms ago
-    if (player.grounded)
-      trails.walk("me", player.pos.x, player.pos.z, -player.yaw, snowDepth(player.pos.x, player.pos.z));
+    // everyone's feet in the snow (trails.ts), remote ones where they're drawn: 100 ms ago; each step
+    // in the drift kicks snow up
+    if (player.grounded) step("me", player.pos.x, player.pos.z, -player.yaw, player.running ? 1 : 0);
     if (lobby) {
       const t = performance.now() - 100;
       for (const r of lobby.people.values())
-        if (poseAt(r, t, pose)) trails.walk(r.id, pose[0], pose[2], -pose[3], snowDepth(pose[0], pose[2]));
+        if (poseAt(r, t, pose)) step(r.id, pose[0], pose[2], -pose[3], 0);
+    }
+    puffs.update(dt, camera);
+    // breath, steaming in front of the face: quicker and harder out of breath
+    breathT -= dt;
+    if (breathT <= 0) {
+      const spent = 1 - body.v.stamina;
+      breathT = 2.9 - 1.6 * Math.max(spent, player.running ? 0.6 : 0) + Math.random() * 0.6;
+      const fx = -Math.sin(player.yaw),
+        fz = -Math.cos(player.yaw);
+      puffs.breathe(
+        player.pos.x + fx * 0.22,
+        player.pos.y - player.sunk + 1.58,
+        player.pos.z + fz * 0.22,
+        fx,
+        fz,
+        spent,
+      );
     }
     trails.update(dt, camera.position.x, camera.position.z, mood.u.snowfall.value);
     // your body: in the menu's shot and over the shoulder, gone once the camera is behind your eyes
     wanderers.self(
       me.seed,
       player.pos.x,
-      player.pos.y,
+      player.pos.y - player.sunk,
       player.pos.z,
       player.yaw,
       lanternOn,
@@ -573,7 +629,7 @@ async function boot() {
       others();
     }
     if (lobby) {
-      wanderers.update(lobby.people);
+      wanderers.update(lobby.people, trails.depthAt);
       sendT += dt;
       if (sendT > 1 / 15) {
         sendT = 0;
@@ -612,6 +668,16 @@ async function boot() {
         ui,
         trails,
         stage,
+        snowDepth,
+        overlay,
+        wind,
+        /** Draws a frame and saves it at full resolution as shots/<name>.png (vite.config.ts). */
+        async shot(name: string) {
+          post.pipe.render();
+          const png = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
+          if (png) await fetch(`/__shot?name=${encodeURIComponent(name)}`, { method: "POST", body: png });
+          return png?.size ?? 0;
+        },
       },
     });
 }

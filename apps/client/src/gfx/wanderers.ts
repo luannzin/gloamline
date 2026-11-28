@@ -142,7 +142,8 @@ export function makeWanderers(camera: THREE.Camera, tags: HTMLElement, models: M
   }
 
   let lastT = performance.now();
-  function update(people: Map<string, Remote>) {
+  /** `sunk`: how far the feet sink into the snow at (x, z), metres (trails.ts). */
+  function update(people: Map<string, Remote>, sunk: (x: number, z: number) => number) {
     const t = performance.now(),
       dt = Math.max(0.001, (t - lastT) / 1000);
     lastT = t;
@@ -155,6 +156,7 @@ export function makeWanderers(camera: THREE.Camera, tags: HTMLElement, models: M
       }
     for (const r of people.values()) {
       if (!poseAt(r, now, o)) continue;
+      o[1] -= sunk(o[0], o[2]);
       const f = figures.get(r.id) ?? figure(r);
       drive(f, dt);
       // the name, above the hood, while in front and within 160 m (fading over the last 40)

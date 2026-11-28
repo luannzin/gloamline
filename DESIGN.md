@@ -126,7 +126,15 @@ slowly; lit to begin with). View: `V` (over the shoulder, where play starts, or 
 
 ## Deep snow
 
-Snow that lies thick enough slows a walk to a trudge (a third of the pace, a higher, slower step) and
-makes running cost more breath. Everyone's feet leave a trail in it: a trench ploughed where the body
-went, a print at each step, a rim of snow pushed aside, the reeds in it trodden flat. Roads and
-trodden trails are firm. Falling snow fills old tracks back in over a few minutes.
+Snow that lies thick enough slows a walk to a trudge (a third of the pace, short strides, each step
+pulled out of the drift) and makes running cost more breath. The body is in it, not on it: the feet
+sink to the shin or the knee, and the ground under the camera is a real surface that the body
+ploughs a trench through, a print pressed at each step, the snow pushed aside heaped in a rim of
+clods, the reeds in it trodden flat. Each step in the drift kicks snow up. A trodden trail is firm
+going, so following someone is easier than breaking trail. Roads are firm. Falling snow fills old
+tracks back in over a few minutes.
+
+The snow in the air rides one wind (`gfx/wind.ts`): flakes streak along it, a few big ones pass
+the lens, and in the gusts it lifts off the ground and blows along it knee-high. In a blizzard the
+near air itself goes white in sheets the wind carries past. Breath steams in front of every face.
+Over the shoulder the camera rides steady: the body does the moving.

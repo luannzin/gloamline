@@ -163,6 +163,9 @@ export function makeGrass(
     rr = r2.sqrt().mul(step * 0.9);
   const bx = cx.add(a.cos().mul(rr)),
     bz = cz.add(a.sin().mul(rr));
+  // where someone has walked the snow is pressed down (trails.ts): the blades stand in the trench's
+  // floor, trodden flat
+  const pressed = texture(trails.texture, vec2(cx, cz).sub(trails.origin).div(trails.span)).level(float(0)).r;
   const by = ground
     .sub(
       nx
@@ -170,7 +173,8 @@ export function makeGrass(
         .add(nz.mul(a.sin().mul(rr)))
         .div(ny),
     )
-    .sub(0.04);
+    .sub(0.04)
+    .sub(pressed.mul(trails.deepest));
   // a few clumps flower: one stem each, a head at its tip (more in the highlands' meadows)
   const flowerP = g0.w.mul(0.09).add(g0.x.mul(0.035)).add(g0.z.mul(0.02));
   const flower = c2.greaterThan(float(1).sub(flowerP)).and(bi.lessThan(0.5)).select(float(1), float(0));
@@ -181,12 +185,8 @@ export function makeGrass(
     .mul(flower.mul(0.35).add(1))
     // the snow's depth hides the bottom of every blade
     .mul(float(1).sub(mood.u.snow.mul(0.3)))
-    // and where someone has walked, it lies trodden flat (trails.ts)
-    .mul(
-      float(1).sub(
-        texture(trails.texture, vec2(cx, cz).sub(trails.origin).div(trails.span)).level(float(0)).r.mul(0.85),
-      ),
-    )
+    // and where someone has walked, it lies trodden flat
+    .mul(float(1).sub(smoothstep(0.01, 0.2, pressed).mul(0.85)))
     .mul(shown);
   // the wind has combed the field: most blades lean its way, a few any way
   const az = mix(

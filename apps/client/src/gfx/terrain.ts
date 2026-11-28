@@ -88,6 +88,58 @@ function grid(seg: number) {
   return g;
 }
 
+/**
+ * The snow layer's grid: `seg` x `seg` cells over the trails' square, positions local to its corner.
+ * Its step divides the square's own step (trails.ts), so as the square moves each vertex lands where
+ * another stood and the surface never swims.
+ */
+function sheet(seg: number, span: number) {
+  const n = seg + 1,
+    pos = new Float32Array(n * n * 3),
+    idx = new Uint32Array(seg * seg * 6);
+  for (let j = 0; j < n; j++)
+    for (let i = 0; i < n; i++) pos.set([(i / seg) * span, 0, (j / seg) * span], (j * n + i) * 3);
+  let k = 0;
+  for (let j = 0; j < seg; j++)
+    for (let i = 0; i < seg; i++) {
+      const a = j * n + i;
+      idx.set([a, a + n, a + 1, a + 1, a + n, a + n + 1], k);
+      k += 6;
+    }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute(
+    "normal",
+    new THREE.BufferAttribute(
+      new Float32Array(n * n * 3).map((_, i) => (i % 3 === 1 ? 1 : 0)),
+      3,
+    ),
+  );
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  return g;
+}
+
+/** The ground's height at (x, z) exactly as the 1 m grid draws it: two triangles a cell, split b-c. */
+function gridHeight(height: THREE.DataTexture, x: Node1, z: Node1) {
+  const fx = x.add(HALF),
+    fz = z.add(HALF),
+    i = fx.floor(),
+    j = fz.floor(),
+    u = fx.sub(i),
+    v = fz.sub(j);
+  const L = (di: number, dj: number) =>
+    textureLoad(height, ivec2(int(i.add(di).clamp(0, SIZE - 1)), int(j.add(dj).clamp(0, SIZE - 1)))).x;
+  const h00 = L(0, 0),
+    h10 = L(1, 0),
+    h01 = L(0, 1),
+    h11 = L(1, 1);
+  return select(
+    u.add(v).lessThan(1),
+    h00.add(h10.sub(h00).mul(u)).add(h01.sub(h00).mul(v)),
+    h11.add(h01.sub(h11).mul(float(1).sub(u))).add(h10.sub(h11).mul(float(1).sub(v))),
+  );
+}
+
 export function makeTerrain(
   tex: GroundTex,
   detail: THREE.Texture,
@@ -95,6 +147,8 @@ export function makeTerrain(
   /** the shadows setting (video.ts): long shadows over the land from High */
   shadows: number,
   trails: Trails,
+  /** the view distance setting (video.ts): how finely the snow layer is meshed (40, 20 or 13 cm) */
+  distance: number,
 ) {
   const group = new THREE.Group();
   // a march along the sun over the height texture, with a penumbra that widens with distance
@@ -136,8 +190,24 @@ export function makeTerrain(
     const attr = new THREE.InstancedBufferAttribute(new Float32Array(N * N * 2), 2);
     attr.setUsage(THREE.DynamicDrawUsage);
     const geo = grid(lod.seg);
-    const mat = material(attr, CHUNK / lod.seg);
-    const mesh = new THREE.Mesh(geo, mat);
+    const step = CHUNK / lod.seg;
+    const off = instancedDynamicBufferAttribute(attr, "vec2") as unknown as ReturnType<typeof vec2>;
+    const position = Fn(() => {
+      const wx = off.x.add(positionLocal.x),
+        wz = off.y.add(positionLocal.z);
+      const ij = ivec2(int(wx.add(HALF).clamp(0, SIZE - 1)), int(wz.add(HALF).clamp(0, SIZE - 1)));
+      const h = textureLoad(tex.height, ij).x;
+      // under the snow layer the grid steps down out of its way (it holds the surface there); the
+      // first metre and a half inside its edge stays, where the two are the same surface
+      const t = vec2(wx, wz).sub(trails.origin);
+      const inside = min(min(t.x, t.y), min(float(trails.span).sub(t.x), float(trails.span).sub(t.y)));
+      return vec3(
+        wx,
+        h.sub(positionLocal.y.mul(step * 3 + 2)).sub(smoothstep(1.5, 4.5, inside).mul(0.9)),
+        wz,
+      );
+    })();
+    const mesh = new THREE.Mesh(geo, material(position, false));
     mesh.count = 0;
     mesh.frustumCulled = false;
     mesh.castShadow = mesh.receiveShadow = true;
@@ -145,17 +215,37 @@ export function makeTerrain(
     return { lod, attr, mesh };
   });
 
-  function material(attr: THREE.InstancedBufferAttribute, step: number) {
+  // --- the snow layer: the ground under the camera as a fine surface the trails press into. A trench
+  // as deep as the snow takes a body, prints in its floor, and the snow it pushed aside heaped beside
+  // it in a rim of clods. Drawn first, so the ground stepped down beneath it is never shaded.
+  const seg = [128, 256, 384, 384][distance];
+  const layerPos = Fn(() => {
+    const wx = trails.origin.x.add(positionLocal.x),
+      wz = trails.origin.y.add(positionLocal.z);
+    const h = gridHeight(tex.height, wx, wz);
+    const tuv = positionLocal.xz.div(trails.span);
+    const press = texture(trails.texture, tuv).level(float(0)).r,
+      blur = texture(trails.texture, tuv).level(float(3)).r;
+    const edge = smoothstep(0, 0.06, tuv.x)
+      .mul(smoothstep(1, 0.94, tuv.x))
+      .mul(smoothstep(0, 0.06, tuv.y))
+      .mul(smoothstep(1, 0.94, tuv.y));
+    const rim = blur.sub(press).max(0);
+    // clods: the rim's top broken up at a hand's scale
+    const clod = texture(detail, vec2(wx, wz).div(0.7)).level(float(0)).x.sub(0.5).mul(rim).mul(0.9);
+    const down = press.sub(rim.mul(0.55)).sub(clod).mul(trails.deepest).mul(edge);
+    return vec3(wx, h.sub(down), wz);
+  })();
+  const layer = new THREE.Mesh(sheet(seg, trails.span), material(layerPos, true));
+  layer.frustumCulled = false;
+  layer.castShadow = layer.receiveShadow = true;
+  layer.renderOrder = -1;
+  group.add(layer);
+
+  function material(position: THREE.Node<"vec3">, pressed: boolean) {
     const m = new THREE.MeshStandardNodeMaterial();
-    const off = instancedDynamicBufferAttribute(attr, "vec2") as unknown as ReturnType<typeof vec2>;
-    m.positionNode = Fn(() => {
-      const wx = off.x.add(positionLocal.x),
-        wz = off.y.add(positionLocal.z);
-      const ij = ivec2(int(wx.add(HALF).clamp(0, SIZE - 1)), int(wz.add(HALF).clamp(0, SIZE - 1)));
-      const h = textureLoad(tex.height, ij).x;
-      return vec3(wx, h.sub(positionLocal.y.mul(step * 3 + 2)), wz);
-    })();
-    const shade = groundShade(tex, detail, mood, trails);
+    m.positionNode = position;
+    const shade = groundShade(tex, detail, mood, pressed ? trails : undefined);
     m.colorNode = shade.color;
     m.normalNode = shade.normal;
     m.roughnessNode = shade.rough;
@@ -329,10 +419,12 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
   ).mul(float(1).sub(wet));
   // two sizes of stone from the stone texture, each kept where its own random is under the density,
   // which drifts with a slow noise so they gather in drifts rather than spread evenly
-  // (stones lie on ground that's near level: on a cliff they'd be smears)
+  // (stones lie on ground that's near level: on a cliff they'd be smears; under the snow they're
+  // buried, and the snow is smooth over them)
   const pebArea = pebDens
     .mul(smoothstep(0.3, 0.7, C.x.mul(0.6).add(B.w.mul(0.4))))
     .mul(smoothstep(0.88, 0.96, macro.y))
+    .mul(smoothstep(0.7, 0.3, snow))
     .toVar();
   const t1 = rot(wp.xz).div(1.6),
     t2 = wp.xz.div(4.3).add(0.5);
@@ -373,31 +465,39 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
     vec3(0.075, 0.064, 0.05),
     smoothstep(0.45, 0.7, C.z.add(B.y.mul(0.4))),
   );
-  // (a stone under the snow is a white bump, not a hole: only the biggest show their tops)
-  const cover = snow
-    .mul(float(1).sub(peb.mul(0.3).mul(float(1).sub(rd))))
-    .mul(float(1).sub(channel.mul(0.5)))
-    .toVar();
-  // trails (trails.ts): a trench about 25 cm deep at its deepest, its floor packed and in shadow, its
-  // walls lit by the slope, a rim of snow pushed up beside it. Only where the snow lies.
+  const cover = snow.mul(float(1).sub(channel.mul(0.5))).toVar();
+  // trails (trails.ts), on the snow layer: the trench and its prints, the floor packed and in shade,
+  // the rim heaped beside it. The surface itself is displaced (makeTerrain); here its slope is read
+  // finer than the mesh can hold, so a print's edge is crisp. Only where the snow lies.
   let trail: Node1 = float(0),
     rim: Node1 = float(0),
+    hollow: Node1 = float(0),
     trailN: THREE.Node<"vec3"> = vec3(0, 0, 0);
   if (trails) {
     const tuv = wp.xz.sub(trails.origin).div(trails.span);
-    const edge = smoothstep(0, 0.05, tuv.x)
-      .mul(smoothstep(1, 0.95, tuv.x))
-      .mul(smoothstep(0, 0.05, tuv.y))
-      .mul(smoothstep(1, 0.95, tuv.y));
-    const te = 1 / 512;
-    const T = (dx: number, dz: number) => texture(trails.texture, tuv.add(vec2(dx * te, dz * te))).r;
-    const d0 = T(0, 0);
-    const k = cover.mul(edge).toVar();
-    trail = d0.mul(k);
-    rim = T(3, 0).add(T(-3, 0)).add(T(0, 3)).add(T(0, -3)).mul(0.25).sub(d0).max(0).mul(k);
-    // depth 0.3 m over two texels (2 x 9.4 cm): the slope of the trench's walls, a little steeper
-    // than true so it reads from a standing eye
-    trailN = vec3(T(1, 0).sub(T(-1, 0)), 0, T(0, 1).sub(T(0, -1))).mul(k.mul(2.6));
+    const edge = smoothstep(0, 0.06, tuv.x)
+      .mul(smoothstep(1, 0.94, tuv.x))
+      .mul(smoothstep(0, 0.06, tuv.y))
+      .mul(smoothstep(1, 0.94, tuv.y));
+    const te = 1 / 1024;
+    // pressed depth and its blur (the third mip, 40 cm), as the layer's vertices read them
+    const P = (dx: number, dz: number) => texture(trails.texture, tuv.add(vec2(dx * te, dz * te))).r;
+    const Bl = (dx: number, dz: number) =>
+      texture(trails.texture, tuv.add(vec2(dx * te, dz * te))).level(float(3)).r;
+    const down = (dx: number, dz: number) => {
+      const p = P(dx, dz);
+      return p.sub(Bl(dx, dz).sub(p).max(0).mul(0.55));
+    };
+    const d0 = P(0, 0);
+    const k = edge.toVar();
+    trail = smoothstep(0.02, 0.3, d0).mul(k).mul(cover);
+    rim = Bl(0, 0).sub(d0).max(0).mul(k).mul(cover);
+    // how far below its surroundings a point lies: the walls hide that much of the sky
+    hollow = d0.sub(Bl(0, 0)).max(0).mul(k);
+    // the true slope: metres down over two texels (10 cm)
+    trailN = vec3(down(1, 0).sub(down(-1, 0)), 0, down(0, 1).sub(down(0, -1))).mul(
+      k.mul(trails.deepest / 0.1),
+    );
   }
   const albedo = mix(
     mix(
@@ -406,7 +506,8 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
       peb,
     ),
     mix(fresh, slush, rd.mul(float(1).sub(rk)))
-      .mul(mix(vec3(1, 1, 1), vec3(0.48, 0.53, 0.64), trail))
+      // packed snow is denser: a little greyer and bluer than the powder around it
+      .mul(mix(vec3(1, 1, 1), vec3(0.84, 0.88, 0.94), trail))
       .mul(rim.mul(0.4).add(1)),
     cover,
   ).mul(shade);
@@ -444,16 +545,27 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
     texture(tex.stones, t1.add(vec2(0, e))).x.sub(S1.x),
   ).mul(k1.mul(14));
   const dD = vec2(dS.x.mul(0.825).add(dS.y.mul(0.565)), dS.y.mul(0.825).sub(dS.x.mul(0.565)));
-  // under snow the grain is buried: only the drifts' long ripples remain
+  // under snow the grain and the stones are buried: the drifts' long swells remain, and the wind's
+  // ripples, ridges a hand apart lying across it, broken and bent by the drift
+  const wd = vec2(0.8, 0.6);
+  const ripple = wp.xz
+    .dot(wd)
+    .mul(5.5)
+    .add(B.y.mul(9))
+    .add(C.x.mul(5))
+    .cos()
+    .mul(smoothstep(0.35, 0.75, A.y.add(C.y.mul(0.4))))
+    .mul(0.09);
   const n = normalize(
     macro
       .add(
         vec3(bump.x.add(dD.x).negate(), 0, bump.y.add(dD.y).negate())
           .mul(tw.y.mul(0.7).add(0.3))
-          .mul(float(1).sub(cover.mul(0.8))),
+          .mul(float(1).sub(cover)),
       )
       .add(side.mul(float(1).sub(cover)))
       .add(vec3(dB.x.negate(), 0, dB.y.negate()).mul(cover.mul(2.5)))
+      .add(vec3(wd.x, 0, wd.y).mul(ripple).mul(cover).mul(float(1).sub(trail)))
       .add(trailN),
   );
   const rough = mix(
@@ -476,7 +588,7 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
         .mul(float(1).sub(cover)),
     )
     .mul(mix(C.y.mul(0.3).add(0.75), float(1), cover.mul(0.7)))
-    .mul(float(1).sub(trail.mul(0.35)));
+    .mul(float(1).sub(hollow.mul(1.5).min(0.4)));
   return { color: albedo, normal: transformNormalToView(n), rough, ao };
 }
 

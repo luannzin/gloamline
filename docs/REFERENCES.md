@@ -70,6 +70,19 @@ What the bar is, in docs/CHARACTERS.md and DESIGN.md's Snow:
   behind against a white void) and Misery's zone survivors (gas masks, a telnyashka, a padded
   tankist's helmet) as the wardrobe the district would have.
 
+## Deep snow: Red Dead Redemption 2, God of War
+
+Two frames sent with the brief (not on disk): RDR2's rider leading a horse along a snowed ridge, and
+God of War's pair walking a snowed ridge toward a crag.
+
+- **Snow is smooth and clean.** A pristine white surface with long soft swells; detail is a fine
+  grain, never pebbles or spots. Its shadows are crisp and blue-grey, the brightest thing in frame is
+  sunlit snow.
+- **The trench reads by its shadow.** Knee-deep, as wide as the body, with soft rounded walls; the
+  low sun fills it with shade, so the line of it is legible from far up the slope.
+- **Legs vanish into it.** The boots are never seen in deep snow; the body is cut off at the shin.
+- **Wind takes snow off the edges.** A plume blows off the crag's lee and off the ridge line.
+
 On the real zone: the IAEA describes painted wooden houses with carved window frames, collapsed
 stoves and peeling wallpaper ([IAEA, abandoned villages](https://www.iaea.org/node/9739));
 [Bely Berag](https://histecon.fas.harvard.edu/climate-loss/bely_berag/radioactive.html) shows a

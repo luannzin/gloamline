@@ -41,6 +41,7 @@ import {
 import * as THREE from "three/webgpu";
 import { SCALE_MIN, type Video } from "../video";
 import type { MoodState } from "./mood";
+import { overlay, sceneDepth } from "./overlay";
 
 type V3 = ReturnType<typeof vec3>;
 
@@ -65,6 +66,12 @@ export function makePost(
     );
   const raw = scenePass.getTextureNode("output");
   const depth = scenePass.getTextureNode("depth");
+  // the specks and puffs, drawn over the settled image at the output's resolution (overlay.ts):
+  // premultiplied colour, and how much they cover
+  sceneDepth.value = scenePass.getTexture("depth");
+  const fxPass = pass(overlay, camera);
+  owned.push(fxPass);
+  const fx = fxPass.getTextureNode("output");
   // the image every later stage reads: upscaled and settled over frames, or the raw pass on Low
   let col: THREE.TextureNode = raw;
   if (temporal) {
@@ -116,7 +123,8 @@ export function makePost(
     owned.push(s);
     contact = s.getTextureNode();
   }
-  const bl = bloom(col, 1, 0.65, 0.25);
+  // (the bloom sees the embers in the air too)
+  const bl = bloom(vec4(col.rgb.mul(float(1).sub(fx.a)).add(fx.rgb), 1), 1, 0.65, 0.25);
   owned.push(bl);
 
   const graded = Fn(() => {
@@ -139,6 +147,8 @@ export function makePost(
         tint.mul(rays.sample(screenUV).r).mul(phase).mul(ground).mul(u.rays).mul(u.sunPower).mul(0.16),
       );
     }
+    // the air's specks over the world
+    c.assign(c.mul(float(1).sub(fx.a)).add(fx.rgb));
     const b = bl.rgb;
     c.assign(mix(c, b, u.bloom.mul(0.3)).add(b.mul(u.bloom.mul(0.2))));
     c.mulAssign(u.exposure);

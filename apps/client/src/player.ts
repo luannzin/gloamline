@@ -58,15 +58,17 @@ function index(w: World): Obstacles {
 }
 
 /**
- * `canRun`: whether the body has the breath for it (body.ts); `footing`: how deep the snow is
- * underfoot, 0..1 (it slows the walk to a trudge).
+ * `canRun`: whether the body has the breath for it (body.ts); `footing`: how much fresh snow is in
+ * the way of the next step, 0..1 (it slows the walk to a trudge); `pressed`: how far the snow under
+ * the feet is pressed down, metres (the feet stand on the trench's floor: trails.ts).
  */
 export function makePlayer(
   world: World,
   camera: THREE.PerspectiveCamera,
   dom: HTMLElement,
   canRun: () => boolean,
-  footing: () => number,
+  footing: (dx: number, dz: number) => number,
+  pressed: () => number,
 ) {
   const obs = index(world);
   const pos = new THREE.Vector3(world.spawn[0], world.spawn[1], world.spawn[2]);
@@ -225,7 +227,9 @@ export function makePlayer(
     head = new THREE.Vector3(),
     look = new THREE.Vector3(),
     eye = new THREE.Vector3();
-  let deep = 0;
+  let deep = 0,
+    sunk = 0,
+    moving = 0;
   function update(dt: number, active: boolean) {
     const k = (c: string) => (active && keys.has(c) ? 1 : 0);
     fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
@@ -240,13 +244,21 @@ export function makePlayer(
       vel.set(0, 0, 0);
     } else {
       const wet = pos.y < WATER_Y - 0.4;
-      // deep snow takes a third of the pace; a trodden trail or a road gives it back
-      deep += ((onGround ? footing() : deep) - deep) * Math.min(1, dt * 4);
-      const speed = (run ? 7.2 : 4.2) * (wet ? 0.6 : 1) * (1 - 0.36 * deep);
       const len = Math.hypot(mx, mz) || 1;
-      const wx = ((fwd.x * mz + right.x * mx) / len) * speed,
-        wz = ((fwd.z * mz + right.z * mx) / len) * speed;
-      const acc = onGround ? 14 : 2.5;
+      const dx = (fwd.x * mz + right.x * mx) / len,
+        dz = (fwd.z * mz + right.z * mx) / len;
+      // deep snow takes two thirds of a walk's pace and half a run's; a trodden trail or a road gives
+      // it back (footing reads the snow a stride ahead, where the next step goes)
+      deep +=
+        ((onGround ? footing(mx || mz ? dx : 0, mx || mz ? dz : 0) : deep) - deep) * Math.min(1, dt * 3);
+      // and each step is pulled out of the drift: the pace surges as a foot lands and sags as the
+      // other drags through
+      const surge = 1 - 0.25 * deep * (0.5 + 0.5 * Math.cos(bob * 2));
+      const speed = (run ? 7.2 * (1 - 0.5 * deep) : 4.2 * (1 - 0.64 * deep)) * (wet ? 0.6 : 1) * surge;
+      const wx = dx * speed,
+        wz = dz * speed;
+      // starting, stopping and turning are slow in a drift: the snow holds the legs
+      const acc = onGround ? 14 * (1 - 0.65 * deep) : 2.5;
       vel.x += (wx - vel.x) * Math.min(1, acc * dt);
       vel.z += (wz - vel.z) * Math.min(1, acc * dt);
       vel.y -= 22 * dt;
@@ -270,20 +282,25 @@ export function makePlayer(
       }
       pos.x = Math.max(-HALF + 40, Math.min(HALF - 40, pos.x));
       pos.z = Math.max(-HALF + 40, Math.min(HALF - 40, pos.z));
-      const moving = Math.hypot(vel.x, vel.z);
-      // in deep snow each step is a high, slow one
-      if (onGround && moving > 0.5) bob += dt * moving * 2.1 * (1 + 0.5 * deep);
-      running = !!run && moving > 4.2;
+      moving = Math.hypot(vel.x, vel.z);
+      // a step every half turn of `bob`; in deep snow the stride is short (trails.ts) and each step a
+      // high, slow one
+      if (onGround && moving > 0.3) bob += (dt * moving * Math.PI) / (0.75 - 0.25 * deep);
+      running = !!run && moving > 4.2 * (1 - 0.5 * deep);
+      // the feet stand on the trench's floor
+      sunk += ((onGround ? pressed() : 0) - sunk) * Math.min(1, dt * 2.5);
     }
     breath += dt;
-    // a body breathing and walking: two slow sines and the step bob, bigger when trudging
-    const by = Math.abs(Math.sin(bob)) * 0.05 * (1 + 0.8 * deep) + Math.sin(breath * 1.3) * 0.008;
-    const bx = Math.cos(bob) * 0.025 * (1 + 0.6 * deep);
-    head.set(pos.x + right.x * bx, pos.y + EYE + by, pos.z + right.z * bx);
-    // over the shoulder: back along the look, a little right and up, pulled in where the ground
-    // would come between
+    // a body breathing and walking: two slow sines and a small step bob, a little more trudging.
+    // Over the shoulder the camera rides steady (a follow camera, not a head): the body does the
+    // moving, the bob is mostly gone
     behind += ((wantBehind ? 1 : 0) - behind) * Math.min(1, dt * 7);
     const e = behind * behind * (3 - 2 * behind);
+    const calm = 1 - 0.8 * e;
+    const by = Math.abs(Math.sin(bob)) * 0.02 * (1 + 0.3 * deep) * calm + Math.sin(breath * 1.3) * 0.006;
+    const bx = Math.cos(bob) * 0.01 * (1 + 0.3 * deep) * calm;
+    // (the sinking is eased too: steps in and out of a trench don't jolt the view)
+    head.set(pos.x + right.x * bx, pos.y - sunk + EYE + by, pos.z + right.z * bx);
     if (e > 0.001) {
       look.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
       let reach = 3.4;
@@ -326,6 +343,22 @@ export function makePlayer(
     },
     get running() {
       return running && !fly;
+    },
+    /** how far the feet have sunk into the snow, metres */
+    get sunk() {
+      return sunk;
+    },
+    /** how much fresh snow the legs push through, 0..1 */
+    get deep() {
+      return deep;
+    },
+    /** speed over the ground, m/s */
+    get speed() {
+      return moving;
+    },
+    /** the stride's phase: a step lands every half turn */
+    get stride() {
+      return bob;
     },
     get grounded() {
       return onGround && !fly;
