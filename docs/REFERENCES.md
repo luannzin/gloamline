@@ -102,7 +102,9 @@ The AAA pass's board (docs/PLAN.md), sent in chat and copied by hand (not fetche
 | `refs/column/eruption-night.webp` | A real eruption at night: billows lit red from beneath, dark ash above, lightning inside the cloud, glowing debris on the slope |
 
 Still wanted: RDR2 snow stopping at a porch roof, a lantern in snowfall at night, a drift against a
-wall, GoW Ragnarök's flakes (`refs/snow-world/`); a winter oak holding brown leaves (`refs/trees/`);
+wall, GoW Ragnarök's flakes, snow plastered on the windward side of trunks and poles
+(`refs/snow-world/`); a winter oak holding brown leaves, a spruce bough close, a tree well
+(`refs/trees/`);
 a real izba with carved window frames (`refs/buildings/`); a snow plume off a crest, a layered cliff
 (`refs/mountains/`); Arthur's coat seams, a telogreika's quilting, an ushanka and mittens
 (`refs/survivor-close/`); RDR2 snow with dry grass tufts (`refs/ground/`).

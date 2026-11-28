@@ -46,24 +46,34 @@ The order (November 2026), each step with its gameplay:
    `snowDepth` and the terrain; snow on the body builds in the open, stops under cover, and
    chills; a wall's lee cuts the wind (`body.ts`). Left for later: fires to melt it off (none exist
    yet; braziers come with the buildings).
+   **0.5. The hit leaves a mark.** Done (November 2026): `mood.snowOn` takes the whole normal where a
+   surface has one and plasters the face turned into the wind, in streaks down it, on the village,
+   bark and rocks (not the leaf cards, which step 1 replaces, nor the terrain, step 5). On the
+   survivor the snow is driven onto the side held to the wind, gathered in the figure's own space
+   over half a minute of snowfall so a turn doesn't move it (`gfx/wanderers.ts`). The white side of
+   a pole is the compass in a white-out; the dark side is the shelter.
 1. **Trees and ground cover.** Spruces read as stacked tiers, and each pine card's one normal turns
    the whole up-tilted card white: a "ghost twin" beside the tree (`gfx/flora.ts`, `gfx/shapes.ts`).
    Want drooping layered boughs with gaps, snow as its own geometry on the boughs, a barked trunk
    flaring into the snow, LODs and an impostor (`tools/blender/trees.py`); oaks with limbs under the
    clumps, holding dead brown leaves. Brushing a spruce or a gust drops snow off a bough, which springs
    up bare. Grass and sedge in random clumps, mostly buried: how much shows tells how deep the snow
-   ahead is (`gfx/grass.ts`).
+   ahead is (`gfx/grass.ts`). Tree wells (world, `snowDepth`): shallow snow under a big spruce's
+   crown, a deep pit at the trunk; shelter from the fall, and a trap.
 2. **Survivor cloth.** The coat's skirt and the ushanka's flaps on bones of their own, swung by
-   `wind.at` like the lantern.
+   `wind.at` like the lantern. The flaps tie down when the cold bites: a friend's hat says how cold
+   they are, with nothing sent.
 3. **Buildings.** Eaves, heavy roof snow with a cornice curling over, icicles, chimney smoke, window
    light pooling on the snow; the ostrog's bricks at the right size, its gate beam seated
-   (`tools/blender/village.py`, `architecture.py`). A lit window marks shelter at night; a gust now
-   and then slides snow off a roof.
+   (`tools/blender/village.py`, `architecture.py`). A lit window marks shelter at night; smoke only
+   from the lived-in houses, leaning with the wind; a gust now and then slides snow off a roof into
+   the clear strip under the eave, onto whoever stands there.
 4. **The Column.** A soft, frayed volume, a top spreading into the cloud layer, orange light beneath
    on the clouds and the snow facing it, a slow flicker (`gfx/column.ts`, `gfx/mood.ts`). At night it
    is the way home.
 5. **Mountains and cliffs.** Strata in the cliff shader, snow on the ledges, plumes off the crests from
-   ridge points found in the heightmap, showing the wind.
+   ridge points found in the heightmap, showing the wind; cornices on the lee of the ridges; the
+   windward plaster (0.5) on the cliff faces.
 6. **The survivor up close.** UVs, normal and occlusion maps baked in Cycles (quilting, seams,
    creases, worn leather), sampled in `gfx/wanderers.ts`; real mittens and hands.
 7. **Colour**, after the Column's light. Snow stays the brightest surface, warm only in small accents;

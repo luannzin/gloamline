@@ -539,14 +539,36 @@ export function makeMood(
   })();
 
   /**
+   * How square a face with world normal `n` stands into the wind, times how hard it blows, 0..1: the
+   * side the snow is driven onto. Undersides take none.
+   */
+  const windward = (n: Node3) =>
+    smoothstep(0.15, 0.85, n.x.mul(wind.u.dir.x).add(n.z.mul(wind.u.dir.y)).negate())
+      .mul(smoothstep(-0.55, -0.1, n.y))
+      .mul(smoothstep(1.5, 6, wind.u.speed));
+
+  /**
    * How much snow lies on a surface at `wp` whose world normal points `up` (its y): all of it on the
    * flat, a rim on ledges, none on cliffs; where the mood has little, it lies in patches that drift
-   * with the same noise as the mist.
+   * with the same noise as the mist. Given the whole normal `n`, a face turned into the wind is
+   * plastered too, in ragged streaks: the windward side of every trunk, post and wall goes white and
+   * the lee side stays dark, so the wind (and the shelter from it) reads in a white-out.
    */
-  const snowOn = (up: Node1, wp: Node3) => {
-    const n = texture(detail, wp.xz.div(37)).x.add(texture(detail, wp.xz.div(7.3)).y.mul(0.35));
+  const snowOn = (up: Node1, wp: Node3, n?: Node3) => {
+    const patch = texture(detail, wp.xz.div(37)).x.add(texture(detail, wp.xz.div(7.3)).y.mul(0.35));
     const flat = smoothstep(0.42, 0.85, up);
-    return smoothstep(0.22, 0.42, flat.mul(u.snow.add(n.sub(0.68).mul(0.75))));
+    const lying = smoothstep(0.22, 0.42, flat.mul(u.snow.add(patch.sub(0.68).mul(0.75))));
+    if (!n) return lying;
+    // in streaks running down the face, never the whole of it: the wood or the bark still shows
+    // through, so a wall keeps its dark shape against the snow
+    // (the detail's stretched ridges, stood up the wall)
+    const streak = texture(detail, vec2(wp.x.add(wp.z).mul(0.8), wp.y.mul(0.12))).w;
+    const plaster = smoothstep(
+      0.55,
+      0.75,
+      windward(n).mul(u.snow).mul(0.75).add(streak.sub(0.5).mul(0.8)).add(patch.sub(0.68).mul(0.3)),
+    );
+    return lying.max(plaster.mul(0.85));
   };
 
   /** Blends the moods for a camera at `p` and eases the uniforms toward them. */

@@ -116,7 +116,7 @@ function barkMat(s: Slot, t: Tex, mood: MoodState, tint: number, wind: number, m
   m.colorNode = mix(
     mix(base, vec3(0.05, 0.085, 0.025).mul(d2.x.add(0.6)), max(up, low).mul(moss)),
     mood.SNOW,
-    mood.snowOn(P.world.y.add(d2.y.sub(0.5).mul(0.3)), positionWorld).mul(0.9),
+    mood.snowOn(P.world.y.add(d2.y.sub(0.5).mul(0.3)), positionWorld, P.world).mul(0.9),
   );
   m.normalNode = bump(P.normal as never, furrow.mul(0.035).add(d2.y.mul(0.008)));
   m.roughnessNode = float(0.92);
@@ -238,8 +238,8 @@ function stoneMat(s: Slot, t: Tex, mood: MoodState, tint: number, mossy: boolean
   const lichen = smoothstep(0.62, 0.8, cell.add(n.mul(0.3))).mul(up.add(0.25).min(1));
   const stone = mix(base, mix(vec3(0.16, 0.16, 0.1), vec3(0.2, 0.11, 0.05), P.seed), lichen.mul(0.4));
   m.roughnessNode = float(0.88);
-  // snow caps on every top, a rim on the ledges
-  const snow = mood.snowOn(nw.y.add(g.sub(0.5).mul(0.4)), wp);
+  // snow caps on every top, a rim on the ledges, plastered on the face to the wind
+  const snow = mood.snowOn(nw.y.add(g.sub(0.5).mul(0.4)), wp, nw);
   if (!mossy) {
     m.colorNode = mix(stone, mood.SNOW, snow);
     return m;

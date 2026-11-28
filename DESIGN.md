@@ -107,8 +107,13 @@ What Elden Ring does, at a browser's budget:
   slant leaves the lee of every wall clear (`gfx/cover.ts`); a flake reaching a roof flattens and
   stops. It parts round a body and leaves a clear wake behind it. Lanterns and lit windows light the
   flakes near them: at night in a blizzard the lantern is a warm sphere of moving snow.
+- What the wind drives the snow onto keeps it: the windward side of every trunk, post, rock and wall
+  is plastered in streaks running down it, the lee side stays dark (`mood.snowOn`), never so thick
+  that a wall loses its dark shape. In a white-out the white side of a pole is the compass, and the
+  dark side is where to stand.
 - Snow builds up on you in the open snowfall, stops under cover and comes off there and, slowly, by
-  your lantern; a coat of it chills you, and standing in a wall's lee keeps the wind off.
+  your lantern; a coat of it chills you, and standing in a wall's lee keeps the wind off. The side
+  you held to the wind whitens first, and stays white when you turn.
 - Roads are trodden: grey slush with ruts and the soil showing.
 - Grass is last summer's: straw, rust and reed heads standing out of the snow.
 - Pines keep their dark needles with snow on the upper side; oaks keep their dead brown leaves.

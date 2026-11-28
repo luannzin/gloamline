@@ -10,6 +10,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   attribute,
   color,
+  faceDirection,
   float,
   fract,
   hash,
@@ -90,7 +91,10 @@ export function makeVillage(world: World, models: Models, detail: THREE.Texture,
       .add(iron.mul(is(0.6)))
       .add(glass.mul(is(0.8)))
       .add(masonry.mul(is(1)));
-    const snow = mood.snowOn(nw.y.add(n1.sub(0.5).mul(0.3)), wp).mul(float(1).sub(is(0.8)));
+    // (a thin board seen from behind faces the other way: its back isn't plastered)
+    const snow = mood
+      .snowOn(nw.y.add(n1.sub(0.5).mul(0.3)), wp, nw.mul(faceDirection))
+      .mul(float(1).sub(is(0.8)));
     m.colorNode = mix(base.mul(ao), mood.SNOW, snow);
     m.roughnessNode = mix(
       float(0.9)

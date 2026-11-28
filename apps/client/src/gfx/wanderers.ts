@@ -191,6 +191,11 @@ function uniforms() {
     frost: uniform(0),
     /** the air on the figure, in its own space, m/s */
     air: uniform(new THREE.Vector3()),
+    /**
+     * where the snow was driven from while it fell, in the figure's own space (length 0..1): the side
+     * it's plastered on, which stays put when the figure turns
+     */
+    plaster: uniform(new THREE.Vector3()),
   };
 }
 
@@ -295,8 +300,21 @@ function material(look: Look, u: ReturnType<typeof uniforms>, detail: THREE.Text
   const legs = smoothstep(crust, crust.sub(0.06), P.y)
     .mul(smoothstep(0.2, 0.5, patch.add(grain.mul(0.2)).add(0.15)))
     .mul(u.caked.min(1).mul(float(1).sub(is("leather").mul(0.5))));
+  // driven onto the side that faced the wind while it fell: a coat with a ragged edge, thinning
+  // round the sides; it builds there sooner than on top (a blizzard whitens your back first)
+  const nb = attribute("normal", "vec3");
+  const driven = smoothstep(
+    0.35,
+    0.6,
+    nb.xz
+      .dot(u.plaster.xz)
+      .mul(smoothstep(-0.5, 0, nb.y))
+      .mul(u.snow.mul(3).min(1))
+      .add(patch.sub(0.5).mul(0.3))
+      .add(grain.sub(0.5).mul(0.15)),
+  ).mul(smoothstep(0.35, 0.55, P.y));
   const exposed = float(1).sub(is("glass")).sub(is("lens")).sub(is("eye")).sub(is("skin"));
-  const snowK = onTop.max(legs).mul(exposed).mul(mood.u.open.mul(0.7).add(0.3)).toVar();
+  const snowK = onTop.max(legs).max(driven).mul(exposed).mul(mood.u.open.mul(0.7).add(0.3)).toVar();
   const fuzzy = is("fur").add(is("wool")).add(is("scarf"));
   base.assign(mix(base, vec3(0.5, 0.53, 0.58), u.frost.mul(0.35).mul(fuzzy).mul(patch)));
   m.colorNode = mix(base, mood.SNOW.mul(grain.mul(0.12).add(0.92)), snowK);
@@ -652,8 +670,18 @@ export function makeWanderers(
     const ws = wind.u.speed.value * wind.at(d.x, d.z) * open * (1 - 0.7 * d.lee);
     const wx = wind.u.dir.value.x * ws + Math.sin(d.yaw) * speed,
       wz = wind.u.dir.value.y * ws + Math.cos(d.yaw) * speed;
-    const ang = -(d.yaw + Math.PI);
+    // (world to figure: undo the root's yaw and the inner half turn)
+    const ang = d.yaw + Math.PI;
     u.air.value.set(wx * Math.cos(ang) - wz * Math.sin(ang), 0, wx * Math.sin(ang) + wz * Math.cos(ang));
+    // the side the snow is driven onto: upwind, in the figure's space, gathered over half a minute of
+    // snowfall (so a turn doesn't move it; settle above sheds it under cover)
+    const from = Math.min(1, ws / 6),
+      fx = -wind.u.dir.value.x * from,
+      fz = -wind.u.dir.value.y * from;
+    const k = Math.min(1, dt * fall * open * 0.04);
+    const pl = u.plaster.value;
+    pl.x += (fx * Math.cos(ang) - fz * Math.sin(ang) - pl.x) * k;
+    pl.z += (fx * Math.sin(ang) + fz * Math.cos(ang) - pl.z) * k;
 
     // --- breath, steaming from under the hat: quicker and harder out of breath
     f.breathT -= dt;
