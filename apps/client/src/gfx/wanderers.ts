@@ -67,9 +67,10 @@ const SLOTS: [string, string[], number[]][] = [
   ["slung", ["slung_rifle", "slung_axe", ""], [0.55, 0.3, 0.15]],
 ];
 const TONES = {
-  jacket: [0x2b2e1f, 0x2a2c2b, 0x1c2230, 0x2e2418, 0x141414],
-  trousers: [0x0b0b0b, 0x1d1f1a, 0x10141f],
-  fur: [0x0a0908, 0x2a1d14, 0x3a3631],
+  // (linear albedo stays real: dyed cotton 0.05 to 0.12, never black)
+  jacket: [0x46503a, 0x4a4c49, 0x323c52, 0x4f3e2a, 0x2a2a2a],
+  trousers: [0x222222, 0x34372f, 0x262c3a],
+  fur: [0x2a2420, 0x4a3524, 0x5a554e, 0x6e5e48],
   canvas: [0x2c2c18, 0x4a3a24, 0x0c0c0c],
   scarf: [0x3e0a0a, 0x7a5410, 0x333333, 0x1a2612],
 };

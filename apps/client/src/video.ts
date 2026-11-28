@@ -103,8 +103,9 @@ export const DETAILS: {
     key: "contact",
     label: "Contact shadows",
     levels: ["Off", "On", "Fine"],
-    hint: "The short shadows under stones and at the foot of walls.",
-    presets: [0, 0, 1, 2],
+    hint: "The short shadows under stones and at the foot of walls, close by. Grainy on snow slopes.",
+    // (off in every preset: on snow their screen-space march leaves pepper and stair-steps)
+    presets: [0, 0, 0, 0],
   },
   {
     key: "reflections",
@@ -159,7 +160,10 @@ export const withPreset = (v: Video, p: number): Video => ({
 export function loadVideo(first: number): Video {
   const base = withPreset({ dynamic: true, fps: 0 } as Video, first);
   try {
-    const saved = JSON.parse(localStorage.getItem("video") ?? "null");
+    // (saves from before contact shadows went off by default are read without that detail)
+    const current = localStorage.getItem(KEY);
+    const saved = JSON.parse(current ?? localStorage.getItem("video") ?? "null");
+    if (saved && typeof saved === "object" && current === null) delete saved.contact;
     if (saved && typeof saved === "object") {
       const v = { ...base, ...saved } as Video;
       // anything out of range (an older save, a hand edit) falls back to the preset's
@@ -177,4 +181,5 @@ export function loadVideo(first: number): Video {
   return base;
 }
 
-export const saveVideo = (v: Video) => localStorage.setItem("video", JSON.stringify(v));
+const KEY = "video.2";
+export const saveVideo = (v: Video) => localStorage.setItem(KEY, JSON.stringify(v));

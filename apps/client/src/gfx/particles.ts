@@ -103,11 +103,11 @@ export function makeParticles(height: THREE.DataTexture, mood: MoodState, wind: 
       // the fall: lit by the pale sky and a little by the sun, streaked by the wind
       n: 12000 * k,
       box: [36, 22, 36],
-      size: [0.018, 0.04],
+      size: [0.014, 0.05],
       drift: [0, -1.3, 0],
-      wobble: 0.35,
+      wobble: 0.5,
       carried: 1,
-      streak: 0.03,
+      streak: 0.022,
       color: (s) => vec3(0.92, 0.94, 0.98).mul(s.mul(0.25).add(0.75)),
       amount: (m) => m.u.snowfall,
       // (as bright as the snow on the ground, which the sun and the whole sky light)
@@ -116,30 +116,30 @@ export function makeParticles(height: THREE.DataTexture, mood: MoodState, wind: 
       alpha: 0.85,
     },
     {
-      // big flakes passing the lens: soft, fast, few
-      n: 260 * k,
+      // flakes passing close to the lens: soft round blurs, few
+      n: 160 * k,
       box: [7, 5, 7],
-      size: [0.012, 0.022],
+      size: [0.008, 0.016],
       drift: [0, -1.1, 0],
       wobble: 0.4,
       carried: 1.15,
-      streak: 0.025,
+      streak: 0.012,
       color: () => vec3(0.95, 0.96, 1),
       amount: (m) => m.u.snowfall.mul(m.u.snowfall),
       light: (m) => m.u.horizon.mul(2.3),
       solid: true,
-      alpha: 0.45,
+      alpha: 0.22,
     },
     {
       // the drift: snow lifted off the ground in the gusts and blown along it, knee-high
-      n: 7000 * k,
+      n: 4500 * k,
       box: [44, 10, 44],
-      size: [0.012, 0.03],
+      size: [0.01, 0.024],
       drift: [0, 0, 0],
-      wobble: 0.15,
+      wobble: 0.35,
       nearGround: [0.02, 0.9],
-      carried: 1.9,
-      streak: 0.05,
+      carried: 1.6,
+      streak: 0.018,
       gusty: true,
       color: () => vec3(0.95, 0.96, 1),
       amount: (m) => m.u.snow.mul(m.u.snowfall.mul(0.8).add(0.2)).mul(m.u.open),
@@ -229,7 +229,8 @@ export function makeParticles(height: THREE.DataTexture, mood: MoodState, wind: 
     })();
     // a speck smaller than a pixel would fall between the pixels and never be drawn: it's drawn a
     // pixel and a half wide instead, and as much fainter as it was made bigger
-    const real = mix(float(kd.size[0]), float(kd.size[1]), s4);
+    // (sizes skewed small: most flakes fine, a few large)
+    const real = mix(float(kd.size[0]), float(kd.size[1]), s4.mul(s4));
     const size = real.max(centre.sub(cameraPosition).length().mul(pixel).mul(1.5));
     const thin = real.div(size).pow(2);
     if (kd.streak) {

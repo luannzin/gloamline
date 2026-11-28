@@ -229,7 +229,30 @@ export function makePlayer(
     eye = new THREE.Vector3();
   let deep = 0,
     sunk = 0,
-    moving = 0;
+    moving = 0,
+    camReach = 3.4;
+
+  /** Whether a point (the camera) is inside a trunk, a stone or a wall, with a margin. */
+  function inside(p: THREE.Vector3) {
+    const e = obs.cells.get(Math.floor((p.z + HALF) / CELL) * NC + Math.floor((p.x + HALF) / CELL));
+    if (!e) return false;
+    for (const i of e.c) {
+      if (obs.circles[i * 4 + 3] < p.y) continue;
+      if (Math.hypot(p.x - obs.circles[i * 4], p.z - obs.circles[i * 4 + 1]) < obs.circles[i * 4 + 2] + 0.3)
+        return true;
+    }
+    for (const i of e.b) {
+      const o = i * BLOCK;
+      if (Math.abs(p.y - B[o + 1]) > B[o + 4] / 2 + 0.2) continue;
+      const c = Math.cos(-B[o + 6]),
+        s = Math.sin(-B[o + 6]),
+        dx = p.x - B[o],
+        dz = p.z - B[o + 2];
+      if (Math.abs(dx * c - dz * s) < B[o + 3] / 2 + 0.2 && Math.abs(dx * s + dz * c) < B[o + 5] / 2 + 0.2)
+        return true;
+    }
+    return false;
+  }
   function update(dt: number, active: boolean) {
     const k = (c: string) => (active && keys.has(c) ? 1 : 0);
     fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
@@ -304,19 +327,25 @@ export function makePlayer(
     head.set(pos.x + right.x * bx, pos.y - sunk + EYE + by, pos.z + right.z * bx);
     if (e > 0.001) {
       look.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
+      // pulled in where the ground, a trunk, a stone or a wall would come between (fast in, slowly
+      // back out, so passing a tree doesn't snap the view)
       let reach = 3.4;
-      for (let s = 1; s <= 6; s++) {
-        const d = (reach * s) / 6;
+      for (let s = 1; s <= 12; s++) {
+        const d = (3.4 * s) / 12;
         eye
           .copy(head)
           .addScaledVector(look, -d)
-          .addScaledVector(right, 0.55 * (s / 6));
-        if (eye.y < heightAt(world.ground.height, eye.x, eye.z) + 0.35) {
-          reach = Math.max(0.6, d - 0.6);
+          .addScaledVector(right, 0.55 * (s / 12));
+        if (eye.y < heightAt(world.ground.height, eye.x, eye.z) + 0.35 || inside(eye)) {
+          reach = Math.max(0.5, d - 0.45);
           break;
         }
       }
-      eye.copy(head).addScaledVector(look, -reach).addScaledVector(right, 0.55);
+      camReach += (reach - camReach) * Math.min(1, dt * (reach < camReach ? 18 : 2.5));
+      eye
+        .copy(head)
+        .addScaledVector(look, -camReach)
+        .addScaledVector(right, 0.55 * Math.min(1, camReach / 3.4));
       eye.y += 0.15;
       camera.position.lerpVectors(head, eye, e);
     } else camera.position.copy(head);

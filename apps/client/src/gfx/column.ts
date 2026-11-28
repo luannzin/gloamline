@@ -20,7 +20,6 @@ import {
   smoothstep,
   texture,
   time,
-  uv,
   vec2,
   vec3,
 } from "three/tsl";
@@ -103,22 +102,9 @@ export function makeColumn(world: World, detail: THREE.Texture, mood: MoodState)
   shell.renderOrder = 11;
   group.add(shell);
 
-  // the glow of the fires on the air above them, showing over the ridge
-  const gm = new THREE.SpriteNodeMaterial({
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    fog: false,
-  });
-  const d = uv().sub(0.5).length().mul(2);
-  gm.colorNode = vec3(1.0, 0.42, 0.12)
-    .mul(smoothstep(1.0, 0.0, d).pow(2.2))
-    .mul(flick)
-    .mul(mix(float(0.35), float(0.9), smoothstep(2.0, 0.6, mood.u.sunPower)));
-  const glow = new THREE.Sprite(gm);
-  glow.scale.set(1300, 700, 1);
-  glow.position.set(COLUMN.x, base + 160, COLUMN.z);
-  glow.renderOrder = 12;
-  group.add(glow);
+  // the glow of the fires on the air above them, showing over the ridge: drawn by the sky (mood.ts),
+  // where it has no edges (a sprite this size showed its rectangle through the bloom and the
+  // upscaler's history)
+  mood.u.glowAt.value.set(COLUMN.x, base + 160, COLUMN.z);
   return group;
 }

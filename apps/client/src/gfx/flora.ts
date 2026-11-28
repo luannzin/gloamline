@@ -144,7 +144,10 @@ function leafMat(s: Slot, t: Tex, mood: MoodState, colA: number, colB: number, w
   // mip level (Golus), so a far crown stays as full as a near one
   const tuv = uv().mul((t.atlas.image as HTMLCanvasElement).width);
   const lod = max(log2(max(dot(dFdx(tuv), dFdx(tuv)), dot(dFdy(tuv), dFdy(tuv)))).mul(0.5), 0);
-  m.opacityNode = tx.a.mul(lod.mul(0.25).add(1));
+  // and cards right at the eye are cut away: a card that passes the camera (standing under a crown)
+  // would fill half the frame with one flat magnified leaf
+  const nearEye = smoothstep(1.2, 2.6, positionWorld.sub(cameraPosition).length());
+  m.opacityNode = tx.a.mul(lod.mul(0.25).add(1)).mul(nearEye);
   // light through the leaves when looking toward the sun, mostly through the outer ones
   const v = normalize(positionWorld.sub(cameraPosition));
   const back = pow(max(dot(v, mood.u.sunDir), 0), 3);

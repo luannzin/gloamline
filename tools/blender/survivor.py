@@ -507,7 +507,7 @@ def trousers():
         snap(bm, lambda co: co.z < 0.4, lambda co: Vector((co.x, co.y, 0.34)))
 
     # (slimmer up under the coat, where they'd only push through its hem)
-    ob = shell("trousers", keep, smooth=8, thick=lambda co: 0.02 if co.z < 0.72 else 0.006, subdiv=1, edges=edges)
+    ob = shell("trousers", keep, smooth=10, thick=lambda co: 0.032 if co.z < 0.72 else 0.008, subdiv=1, edges=edges)
 
     def quilt(co, n):
         ring = abs(((co.z / 0.055) % 1.0) - 0.5) * 2
@@ -617,8 +617,9 @@ def ushanka():
         rounded_box(b, (sx * 0.133, 0.005, 1.68), (0.034, 0.125, 0.14), "fur", fur_sway)
         b.tube([(sx * 0.14, -0.02, 1.615), (sx * 0.143, -0.03, 1.55), (sx * 0.14, -0.025, 1.49)], 0.004, 4, "rope", lambda co: 0.5 + (1.6 - co.z) * 4)
     rounded_box(b, (0, 0.11, 1.705), (0.2, 0.034, 0.1), "fur", fur_sway)
-    ob = b.done("hat_ushanka", fit=FIT_HEAD)
-    displace(ob, lambda co, n: noise(co, 60) * 0.004 + noise(co, 23) * 0.003)
+    # (a size up on the head: a fur hat is big, and its fur stands off it)
+    ob = b.done("hat_ushanka", fit=Matrix.Translation(HEAD_C) @ Matrix.Scale(1.12, 4) @ Matrix.Translation(-HEAD_C) @ FIT_HEAD)
+    displace(ob, lambda co, n: noise(co, 60) * 0.006 + noise(co, 23) * 0.004 + noise(co, 140) * 0.0025)
     return ob
 
 
@@ -1060,9 +1061,11 @@ def lantern_arm(amount):
     the capture's swing through."""
 
     def edit(world, hips, t):
-        mocap.aim(rig, world, "RightArm", (-0.2, -0.22, -0.95), amount)
-        mocap.aim(rig, world, "RightForeArm", (-0.08, -0.82, -0.56), amount)
-        mocap.aim(rig, world, "RightHand", (-0.05, -0.85, -0.52), amount)
+        # the upper arm hanging near the side, the elbow bent: the lantern carried at the hip, a
+        # little ahead, as a weight is carried, not held out
+        mocap.aim(rig, world, "RightArm", (-0.16, -0.08, -0.98), amount)
+        mocap.aim(rig, world, "RightForeArm", (-0.08, -0.7, -0.71), amount)
+        mocap.aim(rig, world, "RightHand", (-0.06, -0.55, -0.83), amount)
 
     return edit
 

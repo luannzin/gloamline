@@ -5,6 +5,7 @@ import { HOLLOW_SUN, type Land, NREG, underRock, type World } from "@zimovye/wor
 import {
   abs,
   cameraPosition,
+  cross,
   dot,
   exp,
   Fn,
@@ -313,6 +314,8 @@ export function makeMood(
     sunDir: uniform(new THREE.Vector3(0, 1, 0)),
     /** 1 under the open sky, 0 under the Hollow's rock */
     open: uniform(1),
+    /** where the Column's fires light the air (column.ts) */
+    glowAt: uniform(new THREE.Vector3(0, -1e6, 0)),
     ...(Object.fromEntries(COLS.map((k) => [k, cu()])) as Record<
       (typeof COLS)[number],
       ReturnType<typeof cu>
@@ -459,7 +462,26 @@ export function makeMood(
       .mul(smoothstep(0.05, 0.3, d.y))
       .mul(float(1).sub(cl.w))
       .mul(2.5);
-    return mix(air(d).add(disc), cl.rgb, cl.w).add(stars);
+    // the Column's fires lighting the air over the ridge (column.ts places it): an ellipse 1300 by 700
+    // m about `glowAt`, read as angles from the eye, so it has no edge anywhere
+    const toG = u.glowAt.sub(cameraPosition);
+    const D = toG.length().max(1);
+    const gd = toG.div(D);
+    const gr = normalize(cross(gd, vec3(0, 1, 0)));
+    const gu = cross(gr, gd);
+    const fw = dot(d, gd).max(0.001);
+    const ex = dot(d, gr).div(fw).mul(D).div(650),
+      ey = dot(d, gu).div(fw).mul(D).div(350);
+    const flick = sin(time.mul(1.3))
+      .mul(0.06)
+      .add(sin(time.mul(3.7)).mul(0.04))
+      .add(0.9);
+    const glow = vec3(1.0, 0.42, 0.12)
+      .mul(smoothstep(1.0, 0.0, vec2(ex, ey).length()).pow(2.2))
+      .mul(smoothstep(0.0, 0.05, dot(d, gd)))
+      .mul(flick)
+      .mul(mix(float(0.35), float(0.9), smoothstep(2.0, 0.6, u.sunPower)));
+    return mix(air(d).add(disc), cl.rgb, cl.w).add(stars).add(glow);
   });
   const skyMat = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, fog: false });
   skyMat.colorNode = sky();

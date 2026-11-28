@@ -234,8 +234,12 @@ export function makeGrass(
   // thin and swells into a head at the tip
   const taper = float(1).sub(v).pow(0.75);
   const head = smoothstep(0.78, 0.9, v).mul(float(1).sub(smoothstep(0.97, 1.0, v)));
+  // (through deep snow only the thin dry stems stand: a blade's width would read as a dark spike)
   const width = mix(
-    mix(float(0.014), float(0.028), r2).max(dist.mul(0.0014)).mul(taper),
+    mix(float(0.014), float(0.028), r2)
+      .mul(float(1).sub(mood.u.snow.mul(0.55)))
+      .max(dist.mul(0.0011))
+      .mul(taper),
     float(0.008).add(head.mul(0.05)).max(dist.mul(0.0012)),
     flower,
   ).mul(shown);
@@ -265,7 +269,12 @@ export function makeGrass(
   const seed = varying(r3),
     vv = varying(v);
   // the field's own colour (shared with the ground under it), a little brighter in the blades
-  const tint = fieldTint(vec2(cx, cz), g0, detail, true).mul(1.3);
+  // (above the snow it's bleached straw, paler the deeper the winter)
+  const tint = mix(
+    fieldTint(vec2(cx, cz), g0, detail, true).mul(1.3),
+    vec3(0.3, 0.25, 0.16),
+    mood.u.snow.mul(0.55),
+  );
   const dry = vec3(0.24, 0.2, 0.13);
   const tintV = varying(tint);
   // seed heads gone over in the cold: pale tufts, rust, a few black

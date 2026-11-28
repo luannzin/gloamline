@@ -81,27 +81,29 @@ export function detailTexture() {
     out = new Uint8Array(N * N * 4);
   const r = rng(7);
   const lat = new Float32Array(64 * 64).map(() => r());
-  // periodic value noise: lattice of `p` cells wrapping across the texture
-  const vn = (x: number, y: number, p: number) => {
+  // periodic value noise: lattice of `p` cells across (`q` down) wrapping across the texture
+  const vn = (x: number, y: number, p: number, q = p) => {
     const xi = Math.floor(x),
       yi = Math.floor(y),
       fx = x - xi,
       fy = y - yi;
     const u = fx * fx * fx * (fx * (fx * 6 - 15) + 10),
       v = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
-    const L = (a: number, b: number) => lat[(((b % p) + p) % p) * 64 + (((a % p) + p) % p)];
+    const L = (a: number, b: number) => lat[(((b % q) + q) % q) * 64 + (((a % p) + p) % p)];
     const a = L(xi, yi),
       b = L(xi + 1, yi),
       c = L(xi, yi + 1),
       d = L(xi + 1, yi + 1);
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
   };
-  const fbm = (x: number, y: number, p: number, oct: number) => {
+  /** fbm whose cells are `stretch` times taller than wide; still tiles (whole cells each way). */
+  const fbm = (x: number, y: number, p: number, oct: number, stretch = 1) => {
     let s = 0,
       a = 0.5,
       w = 0;
     for (let o = 0; o < oct; o++, p *= 2, a *= 0.5) {
-      s += a * vn((x * p) / N, (y * p) / N, Math.min(p, 64));
+      const q = Math.max(1, p / stretch);
+      s += a * vn((x * p) / N, (y * q) / N, Math.min(p, 64), Math.min(q, 64));
       w += a;
     }
     return s / w;
@@ -130,7 +132,9 @@ export function detailTexture() {
           } else if (d < d2) d2 = d;
         }
       out[o + 2] = Math.min(255, (d2 - d1) * 400);
-      out[o + 3] = (1 - Math.abs(fbm(x, y * 0.25, 8, 4) * 2 - 1)) ** 2 * 255;
+      // (stretched by the lattice, not by squeezing y: a squeezed y doesn't wrap, and the seam showed
+      // as a straight line across the sky, the cliffs and the bark)
+      out[o + 3] = (1 - Math.abs(fbm(x, y, 8, 4, 4) * 2 - 1)) ** 2 * 255;
     }
   const t = new THREE.DataTexture(out, N, N, THREE.RGBAFormat, THREE.UnsignedByteType);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;

@@ -203,7 +203,12 @@ export function makeTerrain(
       const inside = min(min(t.x, t.y), min(float(trails.span).sub(t.x), float(trails.span).sub(t.y)));
       return vec3(
         wx,
-        h.sub(positionLocal.y.mul(step * 3 + 2)).sub(smoothstep(1.5, 4.5, inside).mul(0.9)),
+        // (and a few centimetres under it at once: two surfaces at one height fight for each pixel,
+        // a band of pepper and stair-steps round the layer's edge)
+        h
+          .sub(positionLocal.y.mul(step * 3 + 2))
+          .sub(smoothstep(1.5, 4.5, inside).mul(0.9))
+          .sub(smoothstep(-0.8, 0.0, inside).mul(0.05)),
         wz,
       );
     })();
@@ -596,7 +601,8 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
         .mul(float(1).sub(cover)),
     )
     .mul(mix(C.y.mul(0.3).add(0.75), float(1), cover.mul(0.7)))
-    .mul(float(1).sub(hollow.mul(1.5).min(0.4)));
+    // (snow is translucent and bright: a print is shaded, never a dark hole)
+    .mul(float(1).sub(hollow.mul(0.9).min(0.25)));
   return { color: albedo, normal: transformNormalToView(n), rough, ao };
 }
 

@@ -138,8 +138,11 @@ export function makePost(
     s.quality.value = v.contact > 1 ? 0.6 : 0.4;
     s.resolutionScale = 0.5;
     s.useTemporalFiltering = temporal;
-    owned.push(s);
-    contact = s.getTextureNode();
+    // (its march at half resolution leaves a pepper of dark dots the upscaler can't settle: blurred
+    // across depth edges, it's a soft shade under things again)
+    const sb = bilateralBlur(s.getTextureNode());
+    owned.push(s, sb);
+    contact = sb.getTextureNode();
   }
   // (the bloom sees the embers in the air too; scrubbed, as the scene's colour is)
   const fxc = finite(fx);
@@ -148,11 +151,16 @@ export function makePost(
 
   const graded = Fn(() => {
     const c = col.rgb.toVar();
-    if (aoTex) c.mulAssign(mix(float(1), aoTex.sample(screenUV).r, 0.8));
+    if (aoTex) {
+      // on what's near only: past a few tens of metres (and on the sky) the screen-space search
+      // reaches across a whole silhouette and shades the air beside it in a hard-edged wedge
+      const z = perspectiveDepthToViewZ(depth.sample(screenUV).r, camNear, camFar).negate();
+      c.mulAssign(mix(float(1), aoTex.sample(screenUV).r, smoothstep(80, 35, z).mul(0.8)));
+    }
     if (contact) {
       // near only: far off, the march is noise at the scale of a pixel
       const z = perspectiveDepthToViewZ(depth.sample(screenUV).r, camNear, camFar).negate();
-      c.mulAssign(mix(float(1), contact.sample(screenUV).r, smoothstep(45, 20, z).mul(0.5)));
+      c.mulAssign(mix(float(1), contact.sample(screenUV).r, smoothstep(12, 5, z).mul(0.4)));
     }
     if (rays) {
       // forward scattering: the shafts are strongest looking toward the sun
