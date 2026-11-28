@@ -19,12 +19,13 @@ upward surface, breath in the air.
 
 | Layer | What it is | Moves |
 |---|---|---|
-| Body | 1.80 m, broad under the padding; the face is never shown bare | Skeleton (24 bones), clips from Blender |
-| Telogreika | Quilted cotton jacket to the hips, vertical channels, a stand-up collar, patched at an elbow | Skinned; the hem and the collar take the wind |
+| Body | A broad man of about 1.82 m (MPFB's human, CC0), never seen bare: every garment is cut from his own surface | MPFB's `cmu_mb` skeleton (31 bones and the lantern's), its weights |
+| Telogreika | Quilted cotton coat cut at the waist, its skirt hanging to mid-thigh, vertical channels on the body and rings round the sleeves, turned-back cuffs, a stand-up collar, a patch on the left elbow | Skinned; the hem and the collar take the wind |
 | Trousers | Quilted ватные trousers tucked into the boots | Skinned |
-| Boots | Kirza boots to below the knee, the leather creased at the ankle | Skinned |
-| Belt | A wide leather belt over the coat, a brass buckle, two pouches, a canteen | Skinned to the hips |
-| Mittens | Leather-palmed, a cord between them | Skinned to the hands |
+| Boots | Kirza boots to below the knee, wide at the shaft, creased at the ankle, rubber soles | Skinned |
+| Belt | A leather belt laid round the coat, a brass buckle, two cartridge pouches, a canteen, the gas-mask bag on its strap across the chest | Skinned with the coat |
+| Gloves | Leather palms, knitted backs | Skinned to the hands |
+| Balaclava | Wool over the head and face, the eyes showing in its slit | Skinned to the head |
 
 ### Gear that comes off and goes on
 
@@ -51,30 +52,40 @@ indoors; frost greys the fur; breath steams every few seconds, quicker when out 
 
 ### Colour: one survivor, eight people
 
-The cloth is dyed, worn and dirtied, never clean. The coat takes the player's party colour (their
-HUD colour), dulled to a winter dye; the rest is chosen from the seed out of tones that sit together.
+The cloth is dyed, worn and dirtied, never clean: a weave in it, paler where it's worn, dirtier low
+down where it's been through the snow and mud. The coat is a workwear dye leaning a quarter of the way
+toward the player's party colour (their HUD colour), so a friend reads at a distance; the rest is
+chosen from the seed out of tones that sit together.
 
-| Variant | Coat | Trousers | Fur | Scarf | Pack |
-|---|---|---|---|---|---|
-| Party colour | the HUD colour at 15 to 20% value | — | — | — | — |
-| Seed tones (any) | — | soot, field grey, faded navy | black, brown, grey wolf | oxblood, mustard, grey, moss | olive canvas, tan canvas, black rubberised |
+| Part | Tones a seed picks from |
+|---|---|
+| Coat | olive, field grey, faded navy, brown, black (each leaning toward the party colour) |
+| Trousers | soot, field grey, faded navy |
+| Fur | black, brown, grey wolf |
+| Scarf | oxblood, mustard, grey, moss |
+| Pack | olive canvas, tan canvas, black rubberised |
 
-Skin is never seen; the gas mask's glass and the goggles take the light.
+Skin shows only round the eyes in the balaclava's slit; the gas mask's glass and the goggles take
+the light.
 
 ### Animation
 
-Clips authored in `tools/blender/survivor.py` and blended in the game by speed and snow depth:
+Motion capture from the CMU database (free for any use), retargeted onto the skeleton by
+`tools/blender/mocap.py`, each clip one looped cycle, on the spot:
 
-| Clip | When |
-|---|---|
-| `idle` | Still: breathing, weight shifting foot to foot, the lantern held out, looking about |
-| `walk` | 1.4 m/s on firm ground |
-| `run` | 5 to 7 m/s, the lantern swinging, the free arm pumping |
-| `trudge` | Deep snow: high knees, each step pulled out of the drift, the body leaning in, arms out for balance |
-| `jump` | Up and land |
+| Clip | Capture | When |
+|---|---|---|
+| `idle` | 77_02, standing | Still |
+| `cold` | 79_68, "cold" | Still and freezing: hunched, shivering, blowing into the hands |
+| `walk` | 16_15, walk | Firm ground, 1.9 m/s |
+| `run` | 16_45, run | 4.6 m/s, the free arm pumping |
+| `trudge` | 08_04, slow walk, made a trudge: each knee pulled high out of the drift, leaning in, the hips sunk | Deep snow, about 1 m/s |
 
-On top of the clips, in the game: the body leans into turns and into the wind, the head turns toward
-where the camera looks, the feet sink into deep snow and the trench they plough stays behind.
+The right arm holds the lantern out in each. In the game the clips' phase is the ground covered (so
+the feet keep pace with the body), and their weights follow the speed, the snow and the cold. On top
+of them: the lantern swings on its own bone as a damped pendulum (the hand's movement and the wind),
+the head follows where you look, the body shivers when freezing, the feet sink into deep snow and the
+trench they plough stays behind.
 
 ## The creature: Shatun
 

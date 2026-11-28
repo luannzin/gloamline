@@ -59,6 +59,37 @@ function prepare(g: THREE.BufferGeometry) {
   return g;
 }
 
+/**
+ * A rigged file kept whole (its skinned meshes, skeleton and clips): the survivor. Each mesh's COLOR_0
+ * becomes `sway`, `mat` and `ao` (r, g, b; survivor.py says what they hold).
+ */
+export async function loadRig(file: string) {
+  const gltf = await new GLTFLoader().loadAsync(new URL(file, new URL("models/", document.baseURI)).href);
+  gltf.scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const g = m.geometry,
+      col = g.attributes.color;
+    if (!col) return;
+    const n = col.count,
+      sway = new Float32Array(n),
+      mat = new Float32Array(n),
+      ao = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      sway[i] = col.getX(i);
+      mat[i] = col.getY(i);
+      ao[i] = col.getZ(i);
+    }
+    g.deleteAttribute("color");
+    g.setAttribute("sway", new THREE.BufferAttribute(sway, 1));
+    g.setAttribute("mat", new THREE.BufferAttribute(mat, 1));
+    g.setAttribute("ao", new THREE.BufferAttribute(ao, 1));
+  });
+  return { scene: gltf.scene, clips: gltf.animations };
+}
+
+export type Rig = Awaited<ReturnType<typeof loadRig>>;
+
 /** The mesh named `name`, or an error that says which file to rebuild. */
 export function model(models: Models, name: string) {
   const g = models.get(name);

@@ -10,7 +10,7 @@ import { buildWorld } from "./build";
 import { makeColumn } from "./gfx/column";
 import { makeFlora } from "./gfx/flora";
 import { makeGrass } from "./gfx/grass";
-import { loadModels } from "./gfx/models";
+import { loadModels, loadRig } from "./gfx/models";
 import { makeMood } from "./gfx/mood";
 import { overlay } from "./gfx/overlay";
 import { makeParticles } from "./gfx/particles";
@@ -22,7 +22,7 @@ import { detailTexture, foliageAtlas, groundTextures } from "./gfx/textures";
 import { makeTowers } from "./gfx/towers";
 import { makeTrails } from "./gfx/trails";
 import { makeVillage } from "./gfx/village";
-import { makeWanderers } from "./gfx/wanderers";
+import { type Doing, makeWanderers } from "./gfx/wanderers";
 import { makeWater } from "./gfx/water";
 import { makeWind } from "./gfx/wind";
 import { drawMap, toMap } from "./map";
@@ -98,9 +98,10 @@ async function boot() {
     if (intervals.length < 120) requestAnimationFrame(probe);
   };
   requestAnimationFrame(probe);
-  const [world, models] = await Promise.all([
+  const [world, models, survivor] = await Promise.all([
     buildWorld(say),
-    loadModels(["rocks.glb", "trees.glb", "architecture.glb", "survivor.glb", "village.glb"]),
+    loadModels(["rocks.glb", "trees.glb", "architecture.glb", "village.glb"]),
+    loadRig("survivor.glb"),
   ]);
   const refresh = intervals.length > 20 ? intervals.sort((a, b) => a - b)[intervals.length >> 1] : 1000 / 60;
   say("Lighting the world…", 0.85);
@@ -130,7 +131,15 @@ async function boot() {
   const puffs = makePuffs(mood, wind);
   overlay.add(puffs.mesh);
   overlay.fogNode = mood.fogNode;
-  const wanderers = makeWanderers(camera, document.getElementById("tags")!, models);
+  const wanderers = makeWanderers(
+    camera,
+    document.getElementById("tags")!,
+    survivor,
+    detail,
+    mood,
+    wind,
+    puffs,
+  );
   scene.add(
     makeRuins(world, detail),
     makeCave(world, detail),
@@ -251,9 +260,17 @@ async function boot() {
 
   const v = VIEWS[0];
   player.teleport(v[0], v[1], v[2], v[3], v[4]);
+  // (dev: a camera held at an offset from the body, for looking at it: __game.look)
+  const look = { on: false, ang: 0, dist: 2.5, h: 1.4, at: 1.1 };
   const tick = (dt: number, active: boolean) => {
     player.update(dt, active);
     stage.update(dt, player.pos.x, player.pos.y, player.pos.z, player.yaw);
+    if (look.on) {
+      const a = player.yaw + look.ang,
+        p = player.pos;
+      camera.position.set(p.x - Math.sin(a) * look.dist, p.y + look.h, p.z - Math.cos(a) * look.dist);
+      camera.lookAt(p.x, p.y + look.at, p.z);
+    }
     mood.update(camera.position, dt);
     wind.update(dt, mood.u.snowfall.value);
     d.sky();
@@ -556,8 +573,19 @@ async function boot() {
     const y = heightAt(world.ground.height, px, pz) - trails.depthAt(px, pz) * 0.6;
     puffs.kick(px, y, pz, Math.sin(heading), -Math.cos(heading), depth, hard);
   }
-  let breathT = 1,
-    frost = 0;
+  let frost = 0;
+  const doing: Doing = {
+    x: 0,
+    y: 0,
+    z: 0,
+    yaw: 0,
+    speed: 0,
+    deep: 0,
+    lit: true,
+    cold: 0,
+    pitch: 0,
+    spent: 0,
+  };
 
   let last = performance.now(),
     due = 0,
@@ -596,33 +624,20 @@ async function boot() {
         if (poseAt(r, t, pose)) step(r.id, pose[0], pose[2], -pose[3], 0);
     }
     puffs.update(dt, camera);
-    // breath, steaming in front of the face: quicker and harder out of breath
-    breathT -= dt;
-    if (breathT <= 0) {
-      const spent = 1 - body.v.stamina;
-      breathT = 2.9 - 1.6 * Math.max(spent, player.running ? 0.6 : 0) + Math.random() * 0.6;
-      const fx = -Math.sin(player.yaw),
-        fz = -Math.cos(player.yaw);
-      puffs.breathe(
-        player.pos.x + fx * 0.22,
-        player.pos.y - player.sunk + 1.58,
-        player.pos.z + fz * 0.22,
-        fx,
-        fz,
-        spent,
-      );
-    }
     trails.update(dt, camera.position.x, camera.position.z, mood.u.snowfall.value);
     // your body: in the menu's shot and over the shoulder, gone once the camera is behind your eyes
-    wanderers.self(
-      me.seed,
-      player.pos.x,
-      player.pos.y - player.sunk,
-      player.pos.z,
-      player.yaw,
-      lanternOn,
-      player.behind > 0.3 || stage.k < 0.75,
-    );
+    // (it breathes either way: you see your breath in first person too)
+    doing.x = player.pos.x;
+    doing.y = player.pos.y - player.sunk;
+    doing.z = player.pos.z;
+    doing.yaw = player.yaw;
+    doing.speed = player.speed;
+    doing.deep = player.deep;
+    doing.lit = lanternOn;
+    doing.cold = Math.max(0, 1 - body.v.warmth / 0.4);
+    doing.pitch = player.pitch;
+    doing.spent = Math.max(1 - body.v.stamina, player.running ? 0.6 : 0);
+    wanderers.self(me.seed, doing, player.behind > 0.3 || stage.k < 0.75);
     live();
     marksT += dt;
     if (marksT > 0.1) {
@@ -630,7 +645,7 @@ async function boot() {
       others();
     }
     if (lobby) {
-      wanderers.update(lobby.people, trails.depthAt);
+      wanderers.update(lobby.people, trails.depthAt, fresh);
       sendT += dt;
       if (sendT > 1 / 15) {
         sendT = 0;
@@ -675,6 +690,7 @@ async function boot() {
         snowDepth,
         overlay,
         wind,
+        look,
         /** Draws a frame and saves it at full resolution as shots/<name>.png (vite.config.ts). */
         async shot(name: string) {
           post.pipe.render();

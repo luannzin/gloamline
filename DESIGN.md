@@ -120,7 +120,8 @@ the corners and fades out when it has nothing to say.
 
 ## Controls
 
-Look: mouse. Move: `W` `A` `S` `D`. Run: `Shift` (uses stamina). Jump: `Space`. Lantern: `F` (warms you,
+Look: mouse. Move: `W` `A` `S` `D` (a walker's pace, 1.9 m/s). Run: `Shift` (a runner's, 4.6 m/s; uses
+stamina). The paces are a body's, so the motion-captured legs never slide. Jump: `Space`. Lantern: `F` (warms you,
 slowly; lit to begin with). View: `V` (over the shoulder, where play starts, or first person). Map: `Tab`. Menu: `Esc`. Viewpoints: `1` to
 `9`. Stats: `H`.
 

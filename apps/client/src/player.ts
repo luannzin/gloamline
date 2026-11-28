@@ -247,14 +247,15 @@ export function makePlayer(
       const len = Math.hypot(mx, mz) || 1;
       const dx = (fwd.x * mz + right.x * mx) / len,
         dz = (fwd.z * mz + right.z * mx) / len;
-      // deep snow takes two thirds of a walk's pace and half a run's; a trodden trail or a road gives
+      // a walk at a walker's pace and a run at a runner's (the body's clips are motion capture: these
+      // keep its feet from sliding). Deep snow takes half of either; a trodden trail or a road gives
       // it back (footing reads the snow a stride ahead, where the next step goes)
       deep +=
         ((onGround ? footing(mx || mz ? dx : 0, mx || mz ? dz : 0) : deep) - deep) * Math.min(1, dt * 3);
       // and each step is pulled out of the drift: the pace surges as a foot lands and sags as the
       // other drags through
       const surge = 1 - 0.25 * deep * (0.5 + 0.5 * Math.cos(bob * 2));
-      const speed = (run ? 7.2 * (1 - 0.5 * deep) : 4.2 * (1 - 0.64 * deep)) * (wet ? 0.6 : 1) * surge;
+      const speed = (run ? 4.6 : 1.9) * (1 - 0.5 * deep) * (wet ? 0.6 : 1) * surge;
       const wx = dx * speed,
         wz = dz * speed;
       // starting, stopping and turning are slow in a drift: the snow holds the legs
@@ -286,7 +287,7 @@ export function makePlayer(
       // a step every half turn of `bob`; in deep snow the stride is short (trails.ts) and each step a
       // high, slow one
       if (onGround && moving > 0.3) bob += (dt * moving * Math.PI) / (0.75 - 0.25 * deep);
-      running = !!run && moving > 4.2 * (1 - 0.5 * deep);
+      running = !!run && moving > 2.4 * (1 - 0.5 * deep);
       // the feet stand on the trench's floor
       sunk += ((onGround ? pressed() : 0) - sunk) * Math.min(1, dt * 2.5);
     }
@@ -355,6 +356,10 @@ export function makePlayer(
     /** speed over the ground, m/s */
     get speed() {
       return moving;
+    },
+    /** where the eyes look, radians up */
+    get pitch() {
+      return pitch;
     },
     /** the stride's phase: a step lands every half turn */
     get stride() {

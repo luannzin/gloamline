@@ -29,8 +29,14 @@ Three.js r187 (WebGPU, TSL), React + coss ui for the interface, Trystero for the
   the Blender scripts in `tools/blender` (headless, `-t 4`, outputs committed to
   `apps/client/public/models`, loaded by `gfx/models.ts`). Edit the generator and rerun it, never the
   output. The Column is a shader (`gfx/column.ts`), the trails a stamped texture (`gfx/trails.ts`).
+  The survivor is the one exception that starts from outside data: MPFB's CC0 human (for anatomy) and
+  CMU motion capture (`mocap.py` retargets it). `tools/blender/setup.sh` fetches both into
+  `tools/blender/out` (gitignored); build with `BLENDER_USER_RESOURCES` pointing there (the script's
+  header says how). The clothes and gear are still cut and built in code.
 - **coss components are copied, not edited** (`apps/client/src/components/ui`).
 - **Checks**: `bun run check` (world contracts, prints `ok`), `bun run typecheck`, `bun run lint`.
   For visual work, the nine viewpoints (`1` to `9`) are the fixed poses to compare; `__game.post.pin(r)`
-  in the dev tools holds the render scale so frames compare fairly.
+  in the dev tools holds the render scale so frames compare fairly, `__game.shot(name)` saves a frame
+  at full resolution to `shots/` (dev server only), and `__game.look` holds the camera on the body
+  (`{ on, ang, dist, h, at }`) to look at it from any side.
 - Commits follow Conventional Commits, with no `Co-Authored-By` line.

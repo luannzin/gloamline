@@ -31,7 +31,7 @@ export function makeBody() {
     /** Returns true when the body gives out. */
     update(dt: number, e: Exposure) {
       if (e.running) {
-        v.stamina = clamp(v.stamina - 0.14 * (1 + 0.7 * e.deep) * dt);
+        v.stamina = clamp(v.stamina - 0.07 * (1 + 0.8 * e.deep) * dt);
         rested = 0;
         if (v.stamina === 0) spent = true;
       } else {
