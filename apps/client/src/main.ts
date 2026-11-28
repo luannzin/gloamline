@@ -638,7 +638,7 @@ async function boot() {
       }
     }
     // the cold, seen: frost over the view as the warmth runs out (gone in the menu's shot)
-    frost += ((playing ? Math.max(0, 1 - body.v.warmth / 0.45) : 0) - frost) * Math.min(1, dt * 0.8);
+    frost += ((playing ? Math.max(0, 1 - body.v.warmth / 0.35) : 0) - frost) * Math.min(1, dt * 0.5);
     post.frost = frost;
     post.adapt(dt);
     post.pipe.render();

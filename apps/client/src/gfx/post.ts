@@ -31,6 +31,7 @@ import {
   pow,
   screenCoordinate,
   screenUV,
+  select,
   smoothstep,
   texture,
   uniform,
@@ -45,6 +46,12 @@ import type { MoodState } from "./mood";
 import { overlay, sceneDepth } from "./overlay";
 
 type V3 = ReturnType<typeof vec3>;
+
+/** `c` where it's a real colour (no NaN, nothing past half-float range), black where it isn't. */
+const finite = (c: THREE.Node<"vec4">) => {
+  const s = c.x.add(c.y).add(c.z).add(c.w);
+  return select(s.equal(s).and(s.abs().lessThan(6e4)), c, vec4(0, 0, 0, 1));
+};
 
 /** The lens for the video settings `v` (video.ts): upscaling, occlusion, shafts, contact shadows, scale. */
 export function makePost(
@@ -62,11 +69,17 @@ export function makePost(
   // every stage that holds render targets, freed together when the settings change (main.ts)
   const owned: { dispose(): void }[] = [scenePass];
   const temporal = v.aa > 0;
-  // what the later stages read besides the colour: normals for the occlusion, motion for the upscaler
-  if (temporal || v.ao > 0)
-    scenePass.setMRT(
-      mrt({ output, ...(v.ao > 0 ? { normal: normalView } : {}), ...(temporal ? { velocity } : {}) }),
-    );
+  // what the later stages read besides the colour: normals for the occlusion, motion for the upscaler.
+  // Every material's colour is scrubbed on the way out: one pixel of NaN or infinity (a stray
+  // highlight past half-float range, a fog integral at a grazing angle) would be blurred by the bloom
+  // over the whole frame, or kept by the upscaler's history, and the screen would flash black
+  scenePass.setMRT(
+    mrt({
+      output: finite(output),
+      ...(v.ao > 0 ? { normal: normalView } : {}),
+      ...(temporal ? { velocity } : {}),
+    }),
+  );
   const raw = scenePass.getTextureNode("output");
   const depth = scenePass.getTextureNode("depth");
   // the specks and puffs, drawn over the settled image at the output's resolution (overlay.ts):
@@ -128,8 +141,9 @@ export function makePost(
     owned.push(s);
     contact = s.getTextureNode();
   }
-  // (the bloom sees the embers in the air too)
-  const bl = bloom(vec4(col.rgb.mul(float(1).sub(fx.a)).add(fx.rgb), 1), 1, 0.65, 0.25);
+  // (the bloom sees the embers in the air too; scrubbed, as the scene's colour is)
+  const fxc = finite(fx);
+  const bl = bloom(finite(vec4(col.rgb.mul(float(1).sub(fxc.a)).add(fxc.rgb), 1)), 1, 0.65, 0.25);
   owned.push(bl);
 
   const graded = Fn(() => {
@@ -153,7 +167,7 @@ export function makePost(
       );
     }
     // the air's specks over the world
-    c.assign(c.mul(float(1).sub(fx.a)).add(fx.rgb));
+    c.assign(c.mul(float(1).sub(fxc.a)).add(fxc.rgb));
     const b = bl.rgb;
     c.assign(mix(c, b, u.bloom.mul(0.3)).add(b.mul(u.bloom.mul(0.2))));
     c.mulAssign(u.exposure);
@@ -173,23 +187,22 @@ export function makePost(
     // split tone: shadows lean cold steel, highlights a little warm, so a fire or a lit window is
     // the warmest thing in a cold frame
     t.mulAssign(mix(vec3(0.93, 0.98, 1.06), vec3(1.03, 1.0, 0.96), smoothstep(0.06, 0.6, l)));
-    // the cold, when the body is losing it: the colour drains toward steel, and rime grows in from
-    // the edges of the view, needles of ice reaching inward over a milky frost, further the colder
-    // it gets. The needles are the ridge noise laid out around the centre (angle, radius), so they
-    // point at it; three turns of the texture around, so the seam at the left matches.
+    // the cold, when the body is losing it: the colour drains a little toward steel, and a soft
+    // milky rime gathers in the corners and along the edges, never over the middle of the view.
+    // Faint ice in it: the ridge noise laid around the centre (angle, radius), three turns of it so
+    // the seam matches (the angle nudged off the centre's undefined atan2)
     const sq = screenUV.sub(0.5).mul(vec2(aspect, 1));
     const r = sq.length();
-    const ang = sq.y.atan(sq.x).div(Math.PI * 2);
+    const ang = sq.y.atan(sq.x.add(1e-4)).div(Math.PI * 2);
     const needles = texture(detail, vec2(ang.mul(3), r.mul(0.7))).w;
-    const fine = texture(detail, vec2(ang.mul(9), r.mul(2.1)).add(0.4)).w;
-    const milk = texture(detail, sq.mul(1.3)).x;
-    const reach = r.mul(1.25).add(milk.sub(0.5).mul(0.3)).add(needles.mul(0.22)).add(fine.mul(0.08));
-    const rime = smoothstep(float(1.1).sub(frost.mul(0.45)), float(1.32).sub(frost.mul(0.4)), reach).mul(
+    const milk = texture(detail, sq.mul(1.1)).x;
+    const reach = r.mul(1.2).add(milk.sub(0.5).mul(0.25)).add(needles.mul(0.08));
+    const rime = smoothstep(float(1.25).sub(frost.mul(0.3)), float(1.6).sub(frost.mul(0.3)), reach).mul(
       frost.min(1),
     );
-    const iceCol = vec3(0.78, 0.85, 0.92).mul(needles.mul(0.3).add(fine.mul(0.2)).add(0.7));
-    t.assign(mix(t, vec3(l).mul(vec3(0.9, 0.96, 1.06)), frost.mul(0.4)));
-    t.assign(mix(t, iceCol, rime.mul(needles.mul(0.35).add(0.45))));
+    const iceCol = vec3(0.8, 0.86, 0.92).mul(needles.mul(0.12).add(milk.mul(0.1)).add(0.85));
+    t.assign(mix(t, vec3(l).mul(vec3(0.92, 0.97, 1.04)), frost.mul(0.22)));
+    t.assign(mix(t, iceCol, rime.mul(0.55)));
     const s = pow(t.max(0), vec3(1 / 2.2)) as unknown as V3;
     const n = interleavedGradientNoise(screenCoordinate.xy)
       .add(interleavedGradientNoise(screenCoordinate.xy.add(37)))
