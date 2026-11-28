@@ -632,6 +632,8 @@ async function boot() {
     doing.z = player.pos.z;
     doing.yaw = player.yaw;
     doing.speed = player.speed;
+    doing.side = player.side;
+    doing.ahead = player.ahead;
     doing.deep = player.deep;
     doing.lit = lanternOn;
     doing.cold = Math.max(0, 1 - body.v.warmth / 0.4);

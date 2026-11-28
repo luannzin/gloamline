@@ -1056,15 +1056,30 @@ bpy.data.objects.remove(human)
 
 
 # --- the clips ------------------------------------------------------------------------------------
-def lantern_arm(amount):
+LEFT_ARM = ["LeftArm", "LeftForeArm", "LeftHand", "LThumb", "LeftFingerBase", "LeftHandFinger1"]
+UPPER = ["LowerBack", "Spine", "Spine1", "Neck", "Neck1", "Head", "LeftShoulder", "RightShoulder", "LeftArm", "RightArm", "LeftForeArm", "RightForeArm", "LeftHand", "RightHand", "LThumb", "RThumb", "LeftFingerBase", "RightFingerBase", "LeftHandFinger1", "RightHandFinger1"]
+
+
+def bearing(world, out, lean=0.0):
+    """How he carries himself: the free arm held `out` degrees off the body (a padded coat won't let
+    it hang close, and a big man's arms don't), the body leaning `lean` degrees into the way he goes
+    under the pack, the head lifted back level."""
+    mocap.turn(world, LEFT_ARM, "Y", -out)
+    if lean:
+        mocap.turn(world, UPPER, "X", lean)
+        mocap.turn(world, ["Neck1", "Head"], "X", -lean * 0.7)
+
+
+def lantern_arm(amount, out=7, lean=0.0):
     """The right arm holding the lantern out, a little ahead and to the side, letting `1 - amount` of
-    the capture's swing through."""
+    the capture's swing through; the left held `out` degrees off the body; leaning `lean` degrees."""
 
     def edit(world, hips, t):
-        # the upper arm hanging near the side, the elbow bent: the lantern carried at the hip, a
+        bearing(world, out, lean)
+        # the upper arm hanging off the side, the elbow bent: the lantern carried at the hip, a
         # little ahead, as a weight is carried, not held out
-        mocap.aim(rig, world, "RightArm", (-0.16, -0.08, -0.98), amount)
-        mocap.aim(rig, world, "RightForeArm", (-0.08, -0.7, -0.71), amount)
+        mocap.aim(rig, world, "RightArm", (-0.26, -0.08, -0.96), amount)
+        mocap.aim(rig, world, "RightForeArm", (-0.1, -0.7, -0.71), amount)
         mocap.aim(rig, world, "RightHand", (-0.06, -0.55, -0.83), amount)
 
     return edit
@@ -1088,8 +1103,7 @@ def trudge_edit():
             mocap.turn(world, [f"{side}UpLeg", f"{side}Leg", f"{side}Foot", f"{side}ToeBase"], "X", -26 * k)
             mocap.turn(world, [f"{side}Leg", f"{side}Foot", f"{side}ToeBase"], "X", 40 * k)
             mocap.turn(world, [f"{side}Foot", f"{side}ToeBase"], "X", -16 * k)
-        upper = ["LowerBack", "Spine", "Spine1", "Neck", "Neck1", "Head", "LeftShoulder", "RightShoulder", "LeftArm", "RightArm", "LeftForeArm", "RightForeArm", "LeftHand", "RightHand", "LThumb", "RThumb", "LeftFingerBase", "RightFingerBase", "LeftHandFinger1", "RightHandFinger1"]
-        mocap.turn(world, upper, "X", 9)
+        mocap.turn(world, UPPER, "X", 9)
         mocap.turn(world, ["Neck", "Neck1", "Head"], "X", -6)
         hips.z -= 0.035
         arm(world, hips, t)
@@ -1098,9 +1112,17 @@ def trudge_edit():
 
 
 SPEEDS = {}
-SPEEDS["walk"] = mocap.bake_clip(rig, os.path.join(CMU, "16_15.bvh"), "walk", cycle=(0.9, 1.4), edit=lantern_arm(0.85))
-SPEEDS["run"] = mocap.bake_clip(rig, os.path.join(CMU, "16_45.bvh"), "run", cycle=(0.4, 0.8), edit=lantern_arm(0.75))
-SPEEDS["trudge"] = mocap.bake_clip(rig, os.path.join(CMU, "08_04.bvh"), "trudge", cycle=(1.2, 2.0), edit=trudge_edit())
+# (each foot a couple of centimetres further out than the capture's: a heavy man in boots walks wide)
+# the walk is Mixamo's "Walking" (a man's walk, in place: mocap.rooted makes it travel), placed by hand
+# in tools/blender/out/mixamo (setup.sh says how); back and sidesteps from CMU subject 69
+SPEEDS["walk"] = mocap.bake_clip(rig, os.path.join(HERE, "out", "mixamo", "Walking.fbx"), "walk", cycle=(0.8, 1.4), edit=lantern_arm(0.85, 7, 3), wide=0.02)
+SPEEDS["back"] = mocap.bake_clip(rig, os.path.join(CMU, "69_34.bvh"), "back", cycle=(0.8, 1.6), edit=lantern_arm(0.85, 7, 0), wide=0.02, along=(0, 1))
+SPEEDS["left"] = mocap.bake_clip(rig, os.path.join(CMU, "69_42.bvh"), "left", cycle=(0.8, 1.6), edit=lantern_arm(0.85, 7, 0), wide=0.0, along=(1, 0))
+SPEEDS["right"] = mocap.bake_clip(rig, os.path.join(CMU, "69_48.bvh"), "right", cycle=(0.8, 1.6), edit=lantern_arm(0.85, 7, 0), wide=0.0, along=(-1, 0))
+# (cut from the steadiest stretch of the take: the take starts with him setting off, which looped
+# back every cycle as a hop)
+SPEEDS["run"] = mocap.bake_clip(rig, os.path.join(CMU, "16_45.bvh"), "run", cycle=(0.4, 0.8), edit=lantern_arm(0.75, 10, 11), wide=0.015, ground="lowest")
+SPEEDS["trudge"] = mocap.bake_clip(rig, os.path.join(CMU, "08_04.bvh"), "trudge", cycle=(1.2, 2.0), edit=trudge_edit(), wide=0.03)
 def standing(arm_amount, keep):
     """A still clip: the lantern arm, and the head kept looking where the body faces, `keep` of the
     capture's own turning let through (its actor looked about the room; the game turns the head
@@ -1114,8 +1136,8 @@ def standing(arm_amount, keep):
     return edit
 
 
-SPEEDS["idle"] = mocap.bake_clip(rig, os.path.join(CMU, "77_02.bvh"), "idle", cycle=(4, 8), still=True, seconds=6, start=0.2, edit=standing(0.9, 0.25))
-SPEEDS["cold"] = mocap.bake_clip(rig, os.path.join(CMU, "79_68.bvh"), "cold", cycle=(4, 8), still=True, seconds=6, start=0.4, edit=standing(0.5, 0.6))
+SPEEDS["idle"] = mocap.bake_clip(rig, os.path.join(CMU, "77_02.bvh"), "idle", cycle=(4, 8), still=True, seconds=6, start=0.2, edit=standing(0.9, 0.25), wide=0.03)
+SPEEDS["cold"] = mocap.bake_clip(rig, os.path.join(CMU, "79_68.bvh"), "cold", cycle=(4, 8), still=True, seconds=6, start=0.4, edit=standing(0.5, 0.6), wide=0.02)
 scene.render.fps = 30
 
 for o in bpy.context.selected_objects:
@@ -1137,4 +1159,4 @@ bpy.ops.export_scene.gltf(
     export_optimize_animation_size=False,
     export_def_bones=False,
 )
-print("wrote", out, {n: len(bpy.data.objects[n].data.vertices) for n in parts}, "speeds", {k: round(v, 2) for k, v in SPEEDS.items()})
+print("wrote", out, {n: len(bpy.data.objects[n].data.vertices) for n in parts}, "speeds and metres a cycle", {k: (round(v[0], 2), round(v[1], 2)) for k, v in SPEEDS.items()})

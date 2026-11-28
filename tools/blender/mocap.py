@@ -7,8 +7,11 @@
 # then laid on top. The hips carry the capture's bob and sway, scaled to our height; their travel over
 # the ground is taken out, so each clip walks on the spot and the game moves the body.
 #
-# Each clip is cut to one cycle where the motion repeats (found by comparing poses), its ends blended
-# so it loops, and resampled to 30 frames a second.
+# Each gait clip is one cycle cut from where the capture is steady: the whole take is searched for the
+# stretch whose pose repeats best one cycle on, whose speed holds over the next half cycle (not a
+# runner still taking off), whose heading holds (not a turn), and which goes the way asked (forward,
+# back, to a side). It's turned to face ours, its ends are blended so it loops, it starts as the left
+# foot lands, and it's resampled to 30 frames a second.
 import math
 
 import bpy
@@ -16,23 +19,51 @@ from mathutils import Matrix, Quaternion, Vector
 
 # capture joint -> our bone (where the names differ)
 RENAME = {"LeftHandIndex": "LeftHandFinger1", "RightHandIndex": "RightHandFinger1"}
+RIGID = {"LHipJoint", "RHipJoint"}
+
+
+# Mixamo's skeleton (an FBX from mixamo.com) -> the CMU names our rig uses; the rest of its names are
+# the CMU ones once the `mixamorig:` prefix is off
+MIXAMO = {
+    "Spine": "LowerBack",
+    "Spine1": "Spine",
+    "Spine2": "Spine1",
+    "LeftHandThumb1": "LThumb",
+    "RightHandThumb1": "RThumb",
+    "LeftHandIndex1": "LeftHandFinger1",
+    "RightHandIndex1": "RightHandFinger1",
+}
 
 
 def load(path):
+    """The take at `path` (a CMU BVH, or a Mixamo FBX with its bones renamed to CMU's): the armature,
+    its first and last frame, and its frames a second."""
     before = set(bpy.data.objects)
-    bpy.ops.import_anim.bvh(
-        filepath=path,
-        axis_forward="-Z",
-        axis_up="Y",
-        rotate_mode="NATIVE",
-        update_scene_fps=False,
-        update_scene_duration=False,
-        use_fps_scale=False,
-    )
-    ob = next(o for o in bpy.data.objects if o not in before)
+    if path.lower().endswith(".fbx"):
+        bpy.ops.import_scene.fbx(filepath=path, use_anim=True)
+        fps = bpy.context.scene.render.fps / bpy.context.scene.render.fps_base
+        ob = next(o for o in bpy.data.objects if o not in before and o.type == "ARMATURE")
+        for o in [o for o in bpy.data.objects if o not in before and o is not ob]:
+            bpy.data.objects.remove(o)
+        # (renamed through the data, which carries the action's curves along)
+        for b in list(ob.data.bones):
+            short = b.name.split(":")[-1]
+            b.name = MIXAMO.get(short, short)
+    else:
+        bpy.ops.import_anim.bvh(
+            filepath=path,
+            axis_forward="-Z",
+            axis_up="Y",
+            rotate_mode="NATIVE",
+            update_scene_fps=False,
+            update_scene_duration=False,
+            use_fps_scale=False,
+        )
+        fps = 120
+        ob = next(o for o in bpy.data.objects if o not in before)
     act = ob.animation_data.action
     lo, hi = act.frame_range
-    return ob, int(lo), int(hi)
+    return ob, int(lo), int(hi), fps
 
 
 def rot3(m):
@@ -46,7 +77,9 @@ class Retarget:
         self.pairs = []
         for b in sb:
             name = RENAME.get(b.name, b.name)
-            if name in tb:
+            # (the pelvis's bones out to the hip joints stay ours: turned to the capture's they'd
+            # pull our hip joints in toward the middle, and the feet would cross it as they walk)
+            if name in tb and name not in RIGID:
                 self.pairs.append((b.name, name))
         mw = src.matrix_world
         self.src_rest = {b.name: rot3(mw @ b.matrix_local) for b in sb}
@@ -73,6 +106,11 @@ class Retarget:
         # the capture's units to ours: by the length of a leg, hip to ankle
         leg = lambda bones, m: ((m @ bones["LeftUpLeg"].head_local) - (m @ bones["LeftFoot"].head_local)).length
         self.scale = leg(tb, Matrix.Identity(4)) / max(1e-6, leg(sb, mw))
+        # the capture's hip joints sit wider apart than ours (markers on the skin against joints in
+        # the pelvis): turned rotation for rotation, our feet would land that much nearer the middle
+        # and cross it, a catwalk's step. Each foot is set back out by half the difference
+        hw = lambda bones, m: ((m @ bones["LeftUpLeg"].head_local) - (m @ bones["RightUpLeg"].head_local)).length
+        self.spread = max(0.0, (hw(sb, mw) * self.scale - hw(tb, Matrix.Identity(4))) / 2)
 
     def world(self, frame):
         """Our bones' world rotations and the hips' position at the capture's `frame`."""
@@ -86,6 +124,22 @@ class Retarget:
         hp = mw @ self.src.pose.bones["Hips"].head
         hips = self.G @ (hp - self.src_hips_rest) * self.scale
         return out, hips
+
+
+def fk(tgt, world, hips):
+    """Where each bone's head is (armature space) for world rotations `world` and the hips' offset:
+    a bone without a rotation of its own keeps its rest turn relative to its parent."""
+    posed, heads = {}, {}
+    for b in tgt.data.bones:
+        if b.parent is None:
+            posed[b.name] = world.get(b.name) or rot3(b.matrix_local)
+            heads[b.name] = b.head_local + hips
+            continue
+        p = b.parent
+        pr = rot3(p.matrix_local)
+        posed[b.name] = world.get(b.name) or posed[p.name] @ (pr.inverted() @ rot3(b.matrix_local))
+        heads[b.name] = heads[p.name] + posed[p.name] @ (pr.inverted() @ (b.head_local - p.head_local))
+    return heads
 
 
 def local_pose(tgt, world, hips):
@@ -116,96 +170,215 @@ def local_pose(tgt, world, hips):
     return out
 
 
-def period(samples, lo, hi):
-    """The frame count, in [lo, hi], after which `samples` (one vector a frame) best repeats."""
-    best, best_p = 1e18, lo
-    n = len(samples)
-    for p in range(lo, min(hi, n // 2) + 1):
-        e = 0.0
-        c = 0
-        for i in range(0, n - p, 2):
-            a, b = samples[i], samples[i + p]
-            e += sum((x - y) ** 2 for x, y in zip(a, b))
-            c += 1
-        e /= max(1, c)
-        if e < best:
-            best, best_p = e, p
-    return best_p
-
-
 def feature(world):
-    """What a frame's pose is, for comparing frames: the legs' and arms' directions."""
+    """What a frame's pose is, for comparing frames: the legs' and arms' directions, in the hips' own
+    frame (so the same step taken facing another way still matches)."""
+    H = world["Hips"].inverted()
     v = []
-    for n in ("LeftUpLeg", "LeftLeg", "RightUpLeg", "RightLeg", "LeftArm", "RightArm", "Spine1"):
+    for n in ("LeftUpLeg", "LeftLeg", "RightUpLeg", "RightLeg", "LeftFoot", "RightFoot", "LeftArm", "RightArm", "Spine1"):
         if n in world:
-            d = world[n] @ Vector((0, 1, 0))
+            d = H @ (world[n] @ Vector((0, 1, 0)))
             v += [d.x, d.y, d.z]
     return v
 
 
-def bake_clip(tgt, path, name, *, cycle, start=0.25, edit=None, fps=30, seconds=None, still=False):
-    """Retargets the capture at `path` onto `tgt` as action `name`: one cycle of `cycle` (min, max)
-    seconds from `start` of the way in (or `seconds` long for a still clip), looped, at `fps`.
-    `edit(world, hips, phase)` may change each frame's pose. Returns metres a second the capture
-    walked (for the game to match the stride)."""
-    src, lo, hi = load(path)
+def wrap(a):
+    return math.atan2(math.sin(a), math.cos(a))
+
+
+def find_cycle(feats, heading, hips, lo_p, hi_p, along, blend, fps):
+    """The best cycle (start index, length in frames) in a take: its pose repeats one cycle on (checked
+    at four points through it), its speed holds into the next half cycle, its heading holds, and it
+    travels `along` (a direction in the body's own frame: (0, -1) forward, (0, 1) back, (1, 0) to
+    his left, (-1, 0) to his right), at walking pace at least. `blend` of a cycle is kept clear before it (the loop's seam
+    blends into it)."""
+    n = len(feats)
+    best, pick = 1e18, None
+    step = max(1, round(fps / 60))
+    for p in range(lo_p, hi_p + 1, step):
+        q = p // 4
+        first = int(p * blend) + 1
+        for a in range(first, n - p - p * 3 // 4 - 1, step):
+            e = 0.0
+            for k in range(4):
+                fa, fb = feats[a + k * q], feats[a + p + k * q]
+                e += sum((x - y) ** 2 for x, y in zip(fa, fb))
+            e /= 4
+            turn_ = wrap(heading[a + p] - heading[a])
+            T = hips[a + p] - hips[a]
+            T.z = 0
+            T2 = hips[a + p + p // 2] - hips[a + p // 2]
+            T2.z = 0
+            if T.length < 0.35 * p / fps:
+                continue
+            steady_ = (T2 - T).length / T.length
+            # the travel in the body's own frame (it faces -y at heading 0)
+            h = heading[a] + wrap(heading[a + p] - heading[a]) / 2
+            c, s = math.cos(-h), math.sin(-h)
+            rel = Vector((T.x * c - T.y * s, T.x * s + T.y * c, 0)).normalized()
+            off = math.acos(max(-1.0, min(1.0, rel.x * along[0] + rel.y * along[1])))
+            if off > math.radians(40):
+                continue
+            score = e + 6 * turn_ * turn_ + 3 * steady_ * steady_ + 1.5 * off * off
+            if score < best:
+                best, pick = score, (a, p)
+    if pick is None:
+        raise RuntimeError("no steady cycle going that way in this take")
+    return pick
+
+
+LEGS = {"Left": ["LeftUpLeg", "LeftLeg", "LeftFoot", "LeftToeBase"], "Right": ["RightUpLeg", "RightLeg", "RightFoot", "RightToeBase"]}
+
+
+def spread(tgt, world, out):
+    """Each leg turned out at the hip so its foot lands `out` metres further from the middle, the foot
+    kept flat."""
+    bs = tgt.data.bones
+    leg = (bs["LeftUpLeg"].head_local - bs["LeftFoot"].head_local).length
+    deg = math.degrees(math.atan2(out, leg))
+    # (the figure faces -y: turning about +y swings a hanging leg toward -x)
+    turn(world, LEGS["Left"], "Y", -deg)
+    turn(world, LEGS["Left"][2:], "Y", deg)
+    turn(world, LEGS["Right"], "Y", deg)
+    turn(world, LEGS["Right"][2:], "Y", -deg)
+
+
+def ground_gap(tgt, world, hips):
+    """How far the lowest of the feet (ankle or ball, each against its height at rest) is off the
+    ground: negative when it's in it."""
+    bs = tgt.data.bones
+    h = fk(tgt, world, hips)
+    gap = 9.0
+    for n in ("LeftFoot", "RightFoot", "LeftToeBase", "RightToeBase"):
+        gap = min(gap, h[n].z - bs[n].head_local.z)
+    return gap
+
+
+def rooted(tgt, worlds):
+    """A take walked on the spot (Mixamo's "in place": the hips never leave the spot, one loop of the
+    cycle) made to walk: looped four times over, the hips carried forward by however far the planted
+    foot slides back under them each frame. A take that travels is left as it is."""
+    first, last = worlds[0][1], worlds[-1][1]
+    if Vector((last.x - first.x, last.y - first.y)).length > 0.25:
+        return worlds
+    loop = worlds[:-1] * 4
+    out = []
+    carried = Vector()
+    prev = None
+    for w, hp in loop:
+        h = fk(tgt, w, hp)
+        feet = {s: h[f"{s}Foot"] for s in ("Left", "Right")}
+        if prev is not None:
+            # the foot lowest now and a moment ago is the one on the ground: it shouldn't move
+            s = min(("Left", "Right"), key=lambda k: feet[k].z + prev[k].z)
+            d = feet[s] - prev[s]
+            carried -= Vector((d.x, d.y, 0))
+        prev = feet
+        out.append((w, hp + carried))
+    return out
+
+
+def bake_clip(tgt, path, name, *, cycle, start=0.25, edit=None, fps=30, seconds=None, still=False, wide=0.0, ground="plant", along=(0, -1)):
+    """Retargets the capture at `path` onto `tgt` as action `name`: the steadiest cycle of `cycle`
+    (min, max) seconds going `along` (a direction in the body's frame, (0, -1) forward), or for a still
+    clip `seconds` from `start` of the way in; looped, at `fps`. `edit(world, hips, phase)` may change
+    each frame's pose. A gait's cycle starts as the left foot lands, so every gait's phase means the
+    same step and they blend foot for foot. The feet are set `wide` metres further apart than the
+    capture's (besides what our narrower hips need), and stood on the ground: `plant` keeps the lowest
+    foot on it every frame (a walk, standing), `lowest` lifts the whole clip so its lowest moment
+    touches it (a run, which leaves the ground). Returns (metres a second the capture went, metres a
+    cycle) for the game to match the stride."""
+    src, lo, hi, src_fps = load(path)
     rt = Retarget(src, tgt)
-    src_fps = 120
     frames = list(range(lo, hi + 1))
     worlds = [rt.world(f) for f in frames]
-    a = lo + int((hi - lo) * start)
+    blend = 0.18
+    if not still:
+        worlds = rooted(tgt, worlds)
+    hr = tgt.data.bones["Hips"].matrix_local.to_3x3().normalized()
+
+    def heading(w):
+        f = w["Hips"] @ hr.inverted() @ Vector((0, -1, 0))
+        return math.atan2(f.x, -f.y)
+
+    heads = [heading(w) for w, _ in worlds]
     if still:
+        a = int((hi - lo) * start)
         p = int((seconds or 6) * src_fps)
+        p = min(p, len(worlds) - 1 - a)
     else:
-        feats = [feature(w) for w, _ in worlds[a - lo :]]
-        p = period(feats, int(cycle[0] * src_fps), int(cycle[1] * src_fps))
-    b = min(hi, a + p)
-    p = b - a
-    if still:
-        # a clip on the spot faces where the actor happened to: turned to face ours, by the hips'
-        # mean heading over the cycle (their sway kept)
-        hr = tgt.data.bones["Hips"].matrix_local.to_3x3().normalized()
-        ang = 0.0
-        for w, _ in worlds[a - lo : b - lo]:
-            f = w["Hips"] @ hr.inverted() @ Vector((0, -1, 0))
-            ang += math.atan2(f.x, -f.y)
-        ang /= max(1, b - a)
-        R = Matrix.Rotation(-ang, 3, "Z")
-        for i, (w, hp) in enumerate(worlds):
-            worlds[i] = ({k: R @ m for k, m in w.items()}, R @ hp)
+        feats = [feature(w) for w, _ in worlds]
+        a, p = find_cycle(feats, heads, [hp for _, hp in worlds], int(cycle[0] * src_fps), int(cycle[1] * src_fps), along, blend, src_fps)
+    # turned to face ours: by the hips' mean heading over the cycle (their sway kept)
+    s_, c_ = 0.0, 0.0
+    for h in heads[a : a + p]:
+        s_ += math.sin(h)
+        c_ += math.cos(h)
+    R = Matrix.Rotation(-math.atan2(s_, c_), 3, "Z")
+    worlds = [({k: R @ m for k, m in w.items()}, R @ hp) for w, hp in worlds]
+    out = rt.spread + wide
+    for w, _ in worlds:
+        spread(tgt, w, out)
     # the ground covered over the cycle: taken out, kept as the clip's speed
-    h0, h1 = worlds[a - lo][1], worlds[b - lo][1]
+    h0, h1 = worlds[a][1], worlds[a + p][1]
     travel = Vector((h1.x - h0.x, h1.y - h0.y, 0))
     speed = travel.length / (p / src_fps)
+    # start as the left foot lands: where it reaches furthest the way he's going (for a still clip,
+    # where the take was asked to start)
+    shift = 0
+    if not still:
+        d = travel.normalized()
+        reach = [(fk(tgt, w, hp)["LeftFoot"] - fk(tgt, w, hp)["Hips"]).dot(d) for w, hp in worlds[a : a + p]]
+        shift = max(range(len(reach)), key=reach.__getitem__)
+
+    def sample(s):
+        """The pose `s` frames into the cycle (0 <= s < p), its last part blended into the frames
+        before the cycle so it loops; the hips relative to where the cycle starts, on the spot."""
+        f = a + s
+        i0 = int(f)
+        frac = f - i0
+        w0, hp0 = worlds[i0]
+        w1, hp1 = worlds[min(i0 + 1, len(worlds) - 1)]
+        world = {key: w0[key].to_quaternion().slerp(w1[key].to_quaternion(), frac).to_matrix() for key in w0}
+        hips = hp0.lerp(hp1, frac)
+        u = s / p
+        if u > 1 - blend:
+            k = (u - (1 - blend)) / blend
+            k = k * k * (3 - 2 * k)
+            g = f - p
+            j = int(g)
+            gf = g - j
+            wa, ha = worlds[j]
+            wb, hb = worlds[min(j + 1, len(worlds) - 1)]
+            wj = {key: wa[key].to_quaternion().slerp(wb[key].to_quaternion(), gf) for key in wa}
+            world = {key: world[key].to_quaternion().slerp(wj[key], k).to_matrix() for key in world}
+            hips = hips.lerp(ha.lerp(hb, gf) + travel, k)
+        return world, hips - h0 - travel * u
+
     n = max(2, round(p / src_fps * fps))
     act = bpy.data.actions.new(name)
     act.use_fake_user = True
     tgt.animation_data_create()
     tgt.animation_data.action = act
-    blend = 0.18
+    poses = []
     for k in range(n + 1):
         t = k / n
-        f = a + t * p
-        i0 = int(f) - lo
-        frac = f - int(f)
-        w0, hp0 = worlds[min(i0, len(worlds) - 1)]
-        w1, hp1 = worlds[min(i0 + 1, len(worlds) - 1)]
-        world = {key: w0[key].to_quaternion().slerp(w1[key].to_quaternion(), frac).to_matrix() for key in w0}
-        hips = hp0.lerp(hp1, frac)
-        # the loop's seam: the last part blended into the frames before the start
-        if t > 1 - blend:
-            u = (t - (1 - blend)) / blend
-            u = u * u * (3 - 2 * u)
-            g = f - p
-            j = max(0, int(g) - lo)
-            wj, hj = worlds[j]
-            world = {key: world[key].to_quaternion().slerp(wj[key].to_quaternion(), u).to_matrix() for key in world}
-            hips = hips.lerp(hj + travel, u)
-        # on the spot: the travel taken out
-        hips = hips - h0 - travel * t
-        hips.x *= 0.6
+        world, hips = sample((shift + t * p) % p)
+        hips.x *= 0.6 if abs(travel.normalized().x) < 0.5 else 1.0
         if edit:
             edit(world, hips, t)
+        poses.append((world, hips))
+    # stood on the ground (the clip's last frame is its first again: it takes the first's gap)
+    gaps = [ground_gap(tgt, w, hp) for w, hp in poses[:-1]]
+    if ground == "plant":
+        m = len(gaps)
+        # (eased over a few frames: the lowest foot changing over mustn't jolt)
+        gaps = [sum(gaps[(i + j) % m] * c for j, c in ((-2, 1), (-1, 2), (0, 3), (1, 2), (2, 1))) / 9 for i in range(m)]
+    else:
+        gaps = [min(gaps)] * len(gaps)
+    gaps.append(gaps[0])
+    for k, ((world, hips), g) in enumerate(zip(poses, gaps)):
+        hips = hips - Vector((0, 0, g))
         pose = local_pose(tgt, world, hips)
         for pb in tgt.pose.bones:
             q, loc = pose[pb.name]
@@ -223,8 +396,11 @@ def bake_clip(tgt, path, name, *, cycle, start=0.25, edit=None, fps=30, seconds=
     bpy.data.objects.remove(src)
     if act_src:
         bpy.data.actions.remove(act_src)
-    print("clip", name, "frames", n, "speed", round(speed, 2), "m/s", "cycle", round(p / src_fps, 2), "s")
-    return speed
+    print(
+        "clip", name, "from", a, "frames", n, "speed", round(speed, 2), "m/s", "cycle", round(p / src_fps, 2), "s",
+        round(travel.length, 2), "m", "dir", tuple(round(c, 2) for c in travel.normalized()[:2]) if travel.length > 0.05 else "-",
+    )
+    return speed, travel.length
 
 
 def aim(tgt, world, bone, direction, amount=1.0):

@@ -45,6 +45,9 @@ export type Doing = {
   yaw: number;
   /** speed over the ground, m/s (remote: measured from the poses) */
   speed?: number;
+  /** which way he's going in his own frame, m/s (x right, ahead): worked out from the poses if unset */
+  side?: number;
+  ahead?: number;
   /** fresh snow the legs push through, 0..1 */
   deep: number;
   lit: boolean;
@@ -57,7 +60,8 @@ export type Doing = {
 };
 
 /** Metres covered in one cycle (two steps) of each gait clip, as the capture walked them (survivor.py). */
-const CYCLE = { walk: 1.35, run: 1.76, trudge: 1.5 };
+const CYCLE = { walk: 1.55, run: 2.34, trudge: 1.5, back: 0.74, left: 0.52, right: 0.49 };
+const GAITS = ["walk", "run", "trudge", "back", "left", "right"] as const;
 
 // the gear in each slot, and the tones a seed picks from (docs/CHARACTERS.md)
 const SLOTS: [string, string[], number[]][] = [
@@ -142,6 +146,13 @@ type Figure = {
   grip: THREE.Vector3;
   gripVel: THREE.Vector3;
   breathT: number;
+  /** where it was last frame, its heading, which way it's going (eased), its lean into turns */
+  prevX: number;
+  prevZ: number;
+  prevYaw: number;
+  dirX: number;
+  dirY: number;
+  lean: number;
 };
 
 function uniforms() {
@@ -314,7 +325,7 @@ export function makeWanderers(
     fwd = new THREE.Vector3(),
     head = new THREE.Vector3(),
     s = { x: 0, y: 0, z: 0, yaw: 0, speed: 0, deep: 0, lit: false, cold: 0, pitch: 0, spent: 0 } as Doing;
-  const clipNames = ["idle", "walk", "run", "trudge", "cold"];
+  const clipNames = ["idle", "walk", "run", "trudge", "cold", "back", "left", "right"];
 
   function figure(id: string, seed: number): Figure {
     const look = lookOf(seed);
@@ -379,6 +390,12 @@ export function makeWanderers(
       grip: new THREE.Vector3(Number.NaN, 0, 0),
       gripVel: new THREE.Vector3(),
       breathT: Math.random() * 2,
+      prevX: 0,
+      prevZ: 0,
+      prevYaw: 0,
+      dirX: 0,
+      dirY: 1,
+      lean: 0,
     };
     figures.set(id, f);
     return f;
@@ -405,24 +422,59 @@ export function makeWanderers(
     f.root.position.set(d.x, d.y, d.z);
     f.root.rotation.y = d.yaw;
 
-    // --- the clips' weights: idle or cold standing, walk, trudge, run moving
-    const move = THREE.MathUtils.smoothstep(speed, 0.15, 0.7);
+    // which way he's going in his own frame (x right, y ahead), eased: told for you, worked out from
+    // the poses for the others
+    let side = d.side,
+      ahead = d.ahead;
+    if (side === undefined || ahead === undefined) {
+      const vx = d.x - f.prevX,
+        vz = d.z - f.prevZ;
+      side = vx * Math.cos(d.yaw) - vz * Math.sin(d.yaw);
+      ahead = -vx * Math.sin(d.yaw) - vz * Math.cos(d.yaw);
+    }
+    f.prevX = d.x;
+    f.prevZ = d.z;
+    const len = Math.hypot(side, ahead);
+    if (len > 1e-4) {
+      const k = Math.min(1, dt * 10);
+      f.dirX += (side / len - f.dirX) * k;
+      f.dirY += (ahead / len - f.dirY) * k;
+    }
+    const fw = Math.max(0, f.dirY),
+      bk = Math.max(0, -f.dirY),
+      rt = Math.max(0, f.dirX),
+      lt = Math.max(0, -f.dirX),
+      sum = Math.max(1e-3, fw + bk + rt + lt);
+    // --- the clips' weights: idle or cold standing; moving, a blend of the ways he goes (ahead: walk,
+    // trudge or run)
+    const move = THREE.MathUtils.smoothstep(speed, 0.15, 0.5);
     const run = THREE.MathUtils.smoothstep(speed, 2.4, 3.8);
     const trudge = THREE.MathUtils.smoothstep(f.deep, 0.15, 0.45) * (1 - run);
     const cold = THREE.MathUtils.smoothstep(d.cold, 0.55, 0.9);
+    const m = move / sum;
     const w = {
       idle: (1 - move) * (1 - cold),
       cold: (1 - move) * cold,
-      walk: move * (1 - run) * (1 - trudge),
-      trudge: move * trudge,
-      run: move * run,
+      walk: m * fw * (1 - run) * (1 - trudge),
+      trudge: m * fw * trudge,
+      run: m * fw * run,
+      back: m * bk,
+      left: m * lt,
+      right: m * rt,
     };
-    // the gait's phase is the ground covered over the blended cycle's length (standing still, the
-    // phase waits where it was)
+    // the gait's phase is the ground covered over the blended cycle's length (every gait starts as
+    // the left foot lands, so they blend foot for foot; standing still, the phase waits)
     if (move > 1e-3) {
-      const cycle = (CYCLE.walk * w.walk + CYCLE.run * w.run + CYCLE.trudge * w.trudge) / move;
-      f.phase = (f.phase + (speed * dt) / Math.max(0.5, cycle)) % 1;
+      let cycle = 0;
+      for (const k of GAITS) cycle += CYCLE[k] * w[k];
+      f.phase = (f.phase + (speed * dt) / Math.max(0.4, cycle / move)) % 1;
     }
+    // leaning into a turn, the more the faster he goes
+    let turnRate = (d.yaw - f.prevYaw) / Math.max(dt, 1e-3);
+    turnRate = Math.atan2(Math.sin(turnRate * dt), Math.cos(turnRate * dt)) / Math.max(dt, 1e-3);
+    f.prevYaw = d.yaw;
+    f.lean += (THREE.MathUtils.clamp(turnRate * speed * 0.035, -0.14, 0.14) - f.lean) * Math.min(1, dt * 6);
+    f.inner.rotation.z = f.lean;
     f.idleT += dt;
     for (const name of clipNames) {
       const a = f.acts[name];
@@ -561,7 +613,7 @@ export function makeWanderers(
       s.z = o[2];
       s.yaw = o[3];
       s.lit = o[4] > 0.5;
-      s.speed = undefined;
+      s.speed = s.side = s.ahead = undefined;
       s.deep = deep(o[0], o[2]);
       s.cold = 0;
       s.pitch = 0;

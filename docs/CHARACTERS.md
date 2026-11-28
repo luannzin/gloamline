@@ -77,8 +77,10 @@ Motion capture from the CMU database (free for any use), retargeted onto the ske
 |---|---|---|
 | `idle` | 77_02, standing | Still |
 | `cold` | 79_68, "cold" | Still and freezing: hunched, shivering, blowing into the hands |
-| `walk` | 16_15, walk | Firm ground, 1.9 m/s |
-| `run` | 16_45, run | 4.6 m/s, the free arm pumping |
+| `walk` | Mixamo's "Walking" (a man's walk, in place: given travel from the planted foot) | Firm ground ahead, 1.5 m/s |
+| `back` | 69_34, walking backwards | 0.8 m/s |
+| `left`, `right` | 69_42, 69_48, sidesteps | 0.7 m/s |
+| `run` | 16_45, run, its steadiest stretch | Ahead only, 4.6 m/s, the free arm pumping |
 | `trudge` | 08_04, slow walk, made a trudge: each knee pulled high out of the drift, leaning in, the hips sunk | Deep snow, about 1 m/s |
 
 The right arm holds the lantern out in each. In the game the clips' phase is the ground covered (so

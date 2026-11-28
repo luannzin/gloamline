@@ -14,7 +14,10 @@ mkdir -p out/blender-user out/cmu
 BLENDER_USER_RESOURCES="$PWD/out/blender-user" "$BLENDER" --online-mode -c extension install -s -e mpfb
 
 # subject/clip: what each is for (survivor.py)
-for clip in 016/16_15 016/16_45 008/08_04 077/77_02 079/79_68; do
+# The forward walk is Mixamo's "Walking" (mixamo.com, free with an Adobe account; usable in a game,
+# not to be shared as a file): download it as FBX and put it at out/mixamo/Walking.fbx.
+[ -s out/mixamo/Walking.fbx ] || echo "missing: out/mixamo/Walking.fbx (Mixamo's Walking, as FBX)"
+for clip in 016/16_45 008/08_04 077/77_02 079/79_68 069/69_34 069/69_42 069/69_48; do
   name=$(basename "$clip")
   [ -s "out/cmu/$name.bvh" ] ||
     curl -sfL "https://raw.githubusercontent.com/sfd158/cmu-mocap/master/data/$clip.bvh" -o "out/cmu/$name.bvh"
