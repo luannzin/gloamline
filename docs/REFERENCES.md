@@ -56,7 +56,17 @@ Sources: [technerdiness, HUD explained](https://www.technerdiness.com/gta/gta-6-
 
 ## The bar: Crimson Desert
 
-`refs/crimson-desert/`, `refs/creature/` and `refs/survivor/` came with the brief (copied by hand).
+`refs/crimson-desert/`, `refs/creature/` and `refs/survivor/` came with the brief (copied by hand,
+not fetched by `refs.sh`):
+
+| File | What it shows |
+|---|---|
+| `refs/crimson-desert/blizzard-white-horn.webp` | A rider in a white-out, the White Horn's silhouette ahead, snow streaking |
+| `refs/creature/white-horn-standing.webp` | The White Horn standing: pale fur, antlers, the mass of it |
+| `refs/creature/white-horn-face.png` | Its face: antlers through the skull, raw red flesh against white fur |
+| `refs/survivor/metro-exodus-frozen-ruins.webp` | A figure from behind in snow-crusted kit against a white void |
+| `refs/survivor/misery-capsule.png` | Misery's zone survivors: gas masks, a telnyashka, a padded tankist's helmet |
+
 What the bar is, in docs/CHARACTERS.md and DESIGN.md's Snow:
 
 - **The blizzard is a place.** Flakes streak with the wind, close ones blur past the lens, sheets of
@@ -82,6 +92,39 @@ God of War's pair walking a snowed ridge toward a crag.
   low sun fills it with shade, so the line of it is legible from far up the slope.
 - **Legs vanish into it.** The boots are never seen in deep snow; the body is cut off at the shin.
 - **Wind takes snow off the edges.** A plume blows off the crag's lee and off the ridge line.
+
+## The engine side: abyssal-garden
+
+[Noniv/abyssal-garden](https://github.com/Noniv/abyssal-garden): a procedural WebGPU scene in one
+file. Zimovye takes its principles (docs/PLAN.md): everything generated, zero per-frame allocations,
+cached shadows, dynamic resolution, a dithered grade, and its verification gate: fixed camera poses
+reviewed by a critic that sees only the renders, iterated until nothing above minor is left.
+
+## What the survivor is made from
+
+The one place Zimovye starts from outside data (`tools/blender/setup.sh` fetches both into
+`tools/blender/out`, which git ignores):
+
+- **The body:** [MPFB](https://extensions.blender.org/add-ons/mpfb/) 2.0.18, MakeHuman's Blender
+  add-on (GPL; the humans it makes are CC0), installed into a Blender profile of its own. Its `cmu_mb`
+  rig names its bones as the CMU database does, so the capture maps onto it bone for bone.
+- **The motion:** the [CMU Graphics Lab Motion Capture Database](https://mocap.cs.cmu.edu/resources.php)
+  ("free for use in research and commercial projects"), in Bruce Hahne's BVH conversion, from the
+  [sfd158/cmu-mocap](https://github.com/sfd158/cmu-mocap) mirror. Acknowledgment, as CMU asks: "The
+  data used in this project was obtained from mocap.cs.cmu.edu. The database was created with
+  funding from NSF EIA-0196217."
+
+| Clip | Capture | Notes |
+|---|---|---|
+| `idle` | 77_02, standing | Head held to the chest (the actor looked about) |
+| `cold` | 79_68, "cold" | Hunched, blowing into the hands |
+| `walk` | 16_15, walk | 1.14 m/s as captured, 1.35 m a cycle |
+| `run` | 16_45, run/jog | 4.18 m/s, 1.76 m a cycle |
+| `trudge` | 08_04, slow walk | Knees pulled high, leaning in, hips sunk (survivor.py) |
+
+Other captures worth trying later: 77_05 (look around with a flashlight: an idle with the lantern
+raised), 17_08 (a heavyset person's walk), 20_06 and 138_01 (marching), 79_25 (moving a heavy box),
+09_xx (runs at other paces). `tools/blender/out/cmu/index.txt` lists every clip.
 
 On the real zone: the IAEA describes painted wooden houses with carved window frames, collapsed
 stoves and peeling wallpaper ([IAEA, abandoned villages](https://www.iaea.org/node/9739));
