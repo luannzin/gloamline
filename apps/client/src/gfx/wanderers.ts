@@ -48,6 +48,8 @@ export type Doing = {
   /** which way he's going in his own frame, m/s (x right, ahead): worked out from the poses if unset */
   side?: number;
   ahead?: number;
+  /** off the ground (a jump) */
+  air?: boolean;
   /** fresh snow the legs push through, 0..1 */
   deep: number;
   lit: boolean;
@@ -60,8 +62,19 @@ export type Doing = {
 };
 
 /** Metres covered in one cycle (two steps) of each gait clip, as the capture walked them (survivor.py). */
-const CYCLE = { walk: 1.55, run: 2.34, trudge: 1.5, back: 0.74, left: 0.52, right: 0.49 };
-const GAITS = ["walk", "run", "trudge", "back", "left", "right"] as const;
+const CYCLE = {
+  walk: 1.66,
+  run: 3.12,
+  trudge: 1.5,
+  back: 1.27,
+  left: 1.72,
+  right: 1.72,
+  run_left: 2.9,
+  run_right: 2.9,
+};
+const GAITS = ["walk", "run", "trudge", "back", "left", "right", "run_left", "run_right"] as const;
+/** how far into the jump clip he leaves the ground */
+const TAKEOFF = 0.34;
 
 // the gear in each slot, and the tones a seed picks from (docs/CHARACTERS.md)
 const SLOTS: [string, string[], number[]][] = [
@@ -153,6 +166,13 @@ type Figure = {
   dirX: number;
   dirY: number;
   lean: number;
+  /** each clip's weight, eased (crossfades) */
+  w: Record<string, number>;
+  /** the turn clip's place, the turn's rate (eased), the jump clip's place (-1 not jumping) */
+  turnT: number;
+  turnRate: number;
+  jumpT: number;
+  wasAir: boolean;
 };
 
 function uniforms() {
@@ -325,7 +345,21 @@ export function makeWanderers(
     fwd = new THREE.Vector3(),
     head = new THREE.Vector3(),
     s = { x: 0, y: 0, z: 0, yaw: 0, speed: 0, deep: 0, lit: false, cold: 0, pitch: 0, spent: 0 } as Doing;
-  const clipNames = ["idle", "walk", "run", "trudge", "cold", "back", "left", "right"];
+  const clipNames = [
+    "idle",
+    "cold",
+    "walk",
+    "run",
+    "trudge",
+    "back",
+    "left",
+    "right",
+    "run_left",
+    "run_right",
+    "turn_left",
+    "turn_right",
+    "jump",
+  ] as const;
 
   function figure(id: string, seed: number): Figure {
     const look = lookOf(seed);
@@ -396,6 +430,11 @@ export function makeWanderers(
       dirX: 0,
       dirY: 1,
       lean: 0,
+      w: { idle: 1 },
+      turnT: 0,
+      turnRate: 0,
+      jumpT: -1,
+      wasAir: false,
     };
     figures.set(id, f);
     return f;
@@ -451,37 +490,73 @@ export function makeWanderers(
     const run = THREE.MathUtils.smoothstep(speed, 2.4, 3.8);
     const trudge = THREE.MathUtils.smoothstep(f.deep, 0.15, 0.45) * (1 - run);
     const cold = THREE.MathUtils.smoothstep(d.cold, 0.55, 0.9);
-    const m = move / sum;
-    const w = {
-      idle: (1 - move) * (1 - cold),
-      cold: (1 - move) * cold,
+    // turning: how fast, and stepping round on the spot when standing (the feet step through the turn
+    // clip a quarter turn a loop)
+    const dYaw = Math.atan2(Math.sin(d.yaw - f.prevYaw), Math.cos(d.yaw - f.prevYaw));
+    const turnRate = dYaw / Math.max(dt, 1e-3);
+    f.prevYaw = d.yaw;
+    f.turnT = (f.turnT + Math.abs(dYaw) / (Math.PI / 2)) % 1;
+    f.turnRate += (turnRate - f.turnRate) * Math.min(1, dt * 8);
+    const turning = (1 - move) * THREE.MathUtils.smoothstep(Math.abs(f.turnRate), 0.6, 1.6);
+    // in the air: the jump, from where he leaves the ground, played on through the landing
+    if (d.air && !f.wasAir) f.jumpT = TAKEOFF;
+    f.wasAir = !!d.air;
+    if (f.jumpT >= 0) f.jumpT += dt / (f.acts.jump?.getClip().duration ?? 2);
+    if (f.jumpT >= 1 || (!d.air && f.jumpT > 0.85)) f.jumpT = -1;
+    const air = f.jumpT >= 0 ? 1 : 0;
+    const m = (move / sum) * (1 - air);
+    const still = (1 - move) * (1 - turning) * (1 - air);
+    const want: Record<(typeof clipNames)[number], number> = {
+      idle: still * (1 - cold),
+      cold: still * cold,
       walk: m * fw * (1 - run) * (1 - trudge),
       trudge: m * fw * trudge,
       run: m * fw * run,
       back: m * bk,
-      left: m * lt,
-      right: m * rt,
+      left: m * lt * (1 - run),
+      right: m * rt * (1 - run),
+      run_left: m * lt * run,
+      run_right: m * rt * run,
+      turn_left: (1 - air) * turning * (f.turnRate > 0 ? 1 : 0),
+      turn_right: (1 - air) * turning * (f.turnRate > 0 ? 0 : 1),
+      jump: air,
     };
+    // crossfaded: each weight eases toward what it should be (a fifth of a second), and they're kept
+    // summing to one so the bind pose never shows through a change of gait
+    let total = 0;
+    for (const name of clipNames) {
+      const cur = f.w[name] ?? 0;
+      f.w[name] = cur + (want[name] - cur) * Math.min(1, dt * (name === "jump" ? 18 : 10));
+      total += f.w[name];
+    }
     // the gait's phase is the ground covered over the blended cycle's length (every gait starts as
     // the left foot lands, so they blend foot for foot; standing still, the phase waits)
     if (move > 1e-3) {
-      let cycle = 0;
-      for (const k of GAITS) cycle += CYCLE[k] * w[k];
-      f.phase = (f.phase + (speed * dt) / Math.max(0.4, cycle / move)) % 1;
+      let cycle = 0,
+        gw = 0;
+      for (const k of GAITS) {
+        cycle += CYCLE[k] * f.w[k];
+        gw += f.w[k];
+      }
+      if (gw > 1e-3) f.phase = (f.phase + (speed * dt) / Math.max(0.4, cycle / gw)) % 1;
     }
     // leaning into a turn, the more the faster he goes
-    let turnRate = (d.yaw - f.prevYaw) / Math.max(dt, 1e-3);
-    turnRate = Math.atan2(Math.sin(turnRate * dt), Math.cos(turnRate * dt)) / Math.max(dt, 1e-3);
-    f.prevYaw = d.yaw;
-    f.lean += (THREE.MathUtils.clamp(turnRate * speed * 0.035, -0.14, 0.14) - f.lean) * Math.min(1, dt * 6);
+    f.lean += (THREE.MathUtils.clamp(f.turnRate * speed * 0.035, -0.14, 0.14) - f.lean) * Math.min(1, dt * 6);
     f.inner.rotation.z = f.lean;
     f.idleT += dt;
     for (const name of clipNames) {
       const a = f.acts[name];
       if (!a) continue;
-      a.setEffectiveWeight(w[name as keyof typeof w]);
+      a.setEffectiveWeight(f.w[name] / Math.max(total, 1e-3));
       const len = a.getClip().duration;
-      a.time = name === "idle" || name === "cold" ? f.idleT % len : f.phase * len;
+      a.time =
+        name === "idle" || name === "cold"
+          ? f.idleT % len
+          : name === "turn_left" || name === "turn_right"
+            ? f.turnT * len
+            : name === "jump"
+              ? Math.max(0, f.jumpT) * len
+              : f.phase * len;
     }
     f.mixer.update(0);
     f.root.updateMatrixWorld(true);

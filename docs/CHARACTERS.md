@@ -77,10 +77,18 @@ Motion capture from the CMU database (free for any use), retargeted onto the ske
 |---|---|---|
 | `idle` | 77_02, standing | Still |
 | `cold` | 79_68, "cold" | Still and freezing: hunched, shivering, blowing into the hands |
-| `walk` | Mixamo's "Walking" (a man's walk, in place: given travel from the planted foot) | Firm ground ahead, 1.5 m/s |
-| `back` | 69_34, walking backwards | 0.8 m/s |
-| `left`, `right` | 69_42, 69_48, sidesteps | 0.7 m/s |
-| `run` | 16_45, run, its steadiest stretch | Ahead only, 4.6 m/s, the free arm pumping |
+| `walk` | Mixamo, Male Locomotion Pack: walking | Firm ground ahead, 1.6 m/s |
+| `back` | Mixamo: Walking Backwards (in place: given travel from the planted foot) | 1.05 m/s, no running back |
+| `left`, `right` | Pack: left / right strafe walking | 1.65 m/s |
+| `run` | Pack: standard run | Ahead, 4.3 m/s, the free arm pumping |
+| `run_left`, `run_right` | Pack: left / right strafe | 4.3 m/s |
+| `turn_left`, `turn_right` | Pack: turn 90 (the turn taken out: the feet stepping round) | Standing and turning: a quarter turn a loop |
+| `jump` | Pack: jump (its crouch and landing; the game lifts the body) | From take-off through the landing |
+| `idle` | Pack: idle | Still (77_02 before) |
+
+Weights are crossfaded (each eases toward its target over about a fifth of a second, all kept summing
+to one) and the gaits blend by which way the body goes; the Mixamo takes sit in
+`tools/blender/out/mixamo` (setup.sh lists the file names).
 | `trudge` | 08_04, slow walk, made a trudge: each knee pulled high out of the drift, leaning in, the hips sunk | Deep snow, about 1 m/s |
 
 The right arm holds the lantern out in each. In the game the clips' phase is the ground covered (so

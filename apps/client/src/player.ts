@@ -278,10 +278,11 @@ export function makePlayer(
       // and each step is pulled out of the drift: the pace surges as a foot lands and sags as the
       // other drags through
       const surge = 1 - 0.25 * deep * (0.5 + 0.5 * Math.cos(bob * 2));
-      // each way at the pace its clip was captured at (a run only straight ahead), so the feet keep
-      // to the ground: forward 1.5 m/s (4.6 running), back 0.8, a sidestep 0.7
-      const ahead = mz > 0 ? (run ? 4.6 : 1.5) : mz < 0 ? 0.8 : 0;
-      const pace = mz && mx ? (ahead + 0.7) / 2 : mz ? ahead : 0.7;
+      // each way at the pace its clip was captured at, so the feet keep to the ground: forward 1.6 m/s
+      // (4.3 running), back 1.05 (no running back), a sidestep 1.65 (4.3 running)
+      const ahead = mz > 0 ? (run ? 4.3 : 1.6) : mz < 0 ? 1.05 : 0;
+      const aside = run && mz >= 0 ? 4.3 : 1.65;
+      const pace = mz && mx ? (ahead + aside) / 2 : mz ? ahead : aside;
       const speed = pace * (1 - 0.5 * deep) * (wet ? 0.6 : 1) * surge;
       const wx = dx * speed,
         wz = dz * speed;

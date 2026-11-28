@@ -1112,16 +1112,29 @@ def trudge_edit():
 
 
 SPEEDS = {}
+# The locomotion is Mixamo's (one animator, a man's gait: its Male Locomotion Pack, Walking Backwards),
+# placed by hand in tools/blender/out/mixamo (setup.sh says how); the trudge and the cold are CMU's.
 # (each foot a couple of centimetres further out than the capture's: a heavy man in boots walks wide)
-# the walk is Mixamo's "Walking" (a man's walk, in place: mocap.rooted makes it travel), placed by hand
-# in tools/blender/out/mixamo (setup.sh says how); back and sidesteps from CMU subject 69
-SPEEDS["walk"] = mocap.bake_clip(rig, os.path.join(HERE, "out", "mixamo", "Walking.fbx"), "walk", cycle=(0.8, 1.4), edit=lantern_arm(0.85, 7, 3), wide=0.02)
-SPEEDS["back"] = mocap.bake_clip(rig, os.path.join(CMU, "69_34.bvh"), "back", cycle=(0.8, 1.6), edit=lantern_arm(0.85, 7, 0), wide=0.02, along=(0, 1))
-SPEEDS["left"] = mocap.bake_clip(rig, os.path.join(CMU, "69_42.bvh"), "left", cycle=(0.8, 1.6), edit=lantern_arm(0.85, 7, 0), wide=0.0, along=(1, 0))
-SPEEDS["right"] = mocap.bake_clip(rig, os.path.join(CMU, "69_48.bvh"), "right", cycle=(0.8, 1.6), edit=lantern_arm(0.85, 7, 0), wide=0.0, along=(-1, 0))
-# (cut from the steadiest stretch of the take: the take starts with him setting off, which looped
-# back every cycle as a hop)
-SPEEDS["run"] = mocap.bake_clip(rig, os.path.join(CMU, "16_45.bvh"), "run", cycle=(0.4, 0.8), edit=lantern_arm(0.75, 10, 11), wide=0.015, ground="lowest")
+MX = os.path.join(HERE, "out", "mixamo")
+SPEEDS["walk"] = mocap.bake_clip(rig, os.path.join(MX, "pack_walking.fbx"), "walk", edit=lantern_arm(0.85, 7, 3), wide=0.02)
+SPEEDS["back"] = mocap.bake_clip(rig, os.path.join(MX, "walking_backwards.fbx"), "back", cycle=(0.8, 1.6), edit=lantern_arm(0.85, 7, 0), wide=0.02, along=(0, 1))
+SPEEDS["left"] = mocap.bake_clip(rig, os.path.join(MX, "pack_left_strafe_walking.fbx"), "left", edit=lantern_arm(0.85, 7, 0), along=(1, 0))
+SPEEDS["right"] = mocap.bake_clip(rig, os.path.join(MX, "pack_right_strafe_walking.fbx"), "right", edit=lantern_arm(0.85, 7, 0), along=(-1, 0))
+SPEEDS["run"] = mocap.bake_clip(rig, os.path.join(MX, "pack_standard_run.fbx"), "run", cycle=(0.5, 0.9), edit=lantern_arm(0.75, 10, 11), wide=0.015, ground="lowest")
+SPEEDS["run_left"] = mocap.bake_clip(rig, os.path.join(MX, "pack_left_strafe.fbx"), "run_left", cycle=(0.5, 0.9), edit=lantern_arm(0.75, 10, 6), ground="lowest", along=(1, 0))
+SPEEDS["run_right"] = mocap.bake_clip(rig, os.path.join(MX, "pack_right_strafe.fbx"), "run_right", cycle=(0.5, 0.9), edit=lantern_arm(0.75, 10, 6), ground="lowest", along=(-1, 0))
+# turning on the spot: the feet stepping round (the game turns the body), stepped through as he turns
+SPEEDS["turn_left"] = mocap.bake_clip(rig, os.path.join(MX, "pack_left_turn_90.fbx"), "turn_left", edit=lantern_arm(0.9, 7, 0), mode="turn")
+SPEEDS["turn_right"] = mocap.bake_clip(rig, os.path.join(MX, "pack_right_turn_90.fbx"), "turn_right", edit=lantern_arm(0.9, 7, 0), mode="turn")
+
+
+def no_rise(world, hips, t):
+    """A jump's crouch and landing, not its height: the game lifts the body."""
+    lantern_arm(0.6, 10, 0)(world, hips, t)
+    hips.z = min(hips.z, 0.0)
+
+
+SPEEDS["jump"] = mocap.bake_clip(rig, os.path.join(MX, "pack_jump.fbx"), "jump", edit=no_rise, mode="once", ground="none")
 SPEEDS["trudge"] = mocap.bake_clip(rig, os.path.join(CMU, "08_04.bvh"), "trudge", cycle=(1.2, 2.0), edit=trudge_edit(), wide=0.03)
 def standing(arm_amount, keep):
     """A still clip: the lantern arm, and the head kept looking where the body faces, `keep` of the
@@ -1136,7 +1149,7 @@ def standing(arm_amount, keep):
     return edit
 
 
-SPEEDS["idle"] = mocap.bake_clip(rig, os.path.join(CMU, "77_02.bvh"), "idle", cycle=(4, 8), still=True, seconds=6, start=0.2, edit=standing(0.9, 0.25), wide=0.03)
+SPEEDS["idle"] = mocap.bake_clip(rig, os.path.join(MX, "pack_idle.fbx"), "idle", still=True, edit=standing(0.9, 0.6), wide=0.03)
 SPEEDS["cold"] = mocap.bake_clip(rig, os.path.join(CMU, "79_68.bvh"), "cold", cycle=(4, 8), still=True, seconds=6, start=0.4, edit=standing(0.5, 0.6), wide=0.02)
 scene.render.fps = 30
 

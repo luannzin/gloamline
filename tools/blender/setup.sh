@@ -14,10 +14,16 @@ mkdir -p out/blender-user out/cmu
 BLENDER_USER_RESOURCES="$PWD/out/blender-user" "$BLENDER" --online-mode -c extension install -s -e mpfb
 
 # subject/clip: what each is for (survivor.py)
-# The forward walk is Mixamo's "Walking" (mixamo.com, free with an Adobe account; usable in a game,
-# not to be shared as a file): download it as FBX and put it at out/mixamo/Walking.fbx.
-[ -s out/mixamo/Walking.fbx ] || echo "missing: out/mixamo/Walking.fbx (Mixamo's Walking, as FBX)"
-for clip in 016/16_45 008/08_04 077/77_02 079/79_68 069/69_34 069/69_42 069/69_48; do
+# The locomotion is Mixamo's (mixamo.com, free with an Adobe account; usable in a game, not to be
+# shared as files): its Male Locomotion Pack and Walking Backwards, as FBX, in out/mixamo named
+# pack_<name with underscores>.fbx (pack_walking, pack_standard_run, pack_left_strafe_walking,
+# pack_right_strafe_walking, pack_left_strafe, pack_right_strafe, pack_left_turn_90,
+# pack_right_turn_90, pack_jump, pack_idle) and walking_backwards.fbx.
+for f in pack_walking pack_standard_run pack_left_strafe_walking pack_right_strafe_walking pack_left_strafe \
+  pack_right_strafe pack_left_turn_90 pack_right_turn_90 pack_jump pack_idle walking_backwards; do
+  [ -s "out/mixamo/$f.fbx" ] || echo "missing: out/mixamo/$f.fbx (Mixamo)"
+done
+for clip in 008/08_04 079/79_68; do
   name=$(basename "$clip")
   [ -s "out/cmu/$name.bvh" ] ||
     curl -sfL "https://raw.githubusercontent.com/sfd158/cmu-mocap/master/data/$clip.bvh" -o "out/cmu/$name.bvh"
