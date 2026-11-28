@@ -460,10 +460,18 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
   // with the soil showing in the ruts; stones and the odd tussock break through where it's thin
   const drift = A.y.mul(0.5).add(C.x.mul(0.3)).add(0.55);
   const fresh = mood.SNOW.mul(drift.mul(0.12).add(0.9));
+  // the road under snow: packed grey, and two wheel ruts along it (bands of the road mask's rise from
+  // its edge to its middle), wet and dark where the soil comes through, broken up by the noise
+  const rutBand = g1.y.sub(0.72).div(0.08);
+  const rut = rutBand
+    .mul(rutBand)
+    .negate()
+    .exp()
+    .mul(smoothstep(0.3, 0.65, C.y.add(B.x.mul(0.35))));
   const slush = mix(
-    vec3(0.3, 0.31, 0.32),
-    vec3(0.075, 0.064, 0.05),
-    smoothstep(0.45, 0.7, C.z.add(B.y.mul(0.4))),
+    vec3(0.34, 0.35, 0.36).mul(B.y.mul(0.25).add(0.85)),
+    vec3(0.085, 0.074, 0.058),
+    rut.mul(0.85),
   );
   const cover = snow.mul(float(1).sub(channel.mul(0.5))).toVar();
   // trails (trails.ts), on the snow layer: the trench and its prints, the floor packed and in shade,

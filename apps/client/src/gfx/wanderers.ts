@@ -178,7 +178,8 @@ const MAT = (name: string) =>
   ].indexOf(name);
 
 function material(look: Look, u: ReturnType<typeof uniforms>, detail: THREE.Texture, mood: MoodState) {
-  const m = new THREE.MeshStandardNodeMaterial();
+  // physical, for cloth's sheen: the soft bright rim fibres give a coat at a grazing angle
+  const m = new THREE.MeshPhysicalNodeMaterial();
   const sway = attribute("sway", "float"),
     kind = attribute("mat", "float"),
     ao = attribute("ao", "float");
@@ -268,6 +269,10 @@ function material(look: Look, u: ReturnType<typeof uniforms>, detail: THREE.Text
     .sub(is("wood").mul(0.3));
   m.roughnessNode = mix(rough, float(0.65), snowK);
   m.metalnessNode = is("iron").mul(0.55).add(is("brass").mul(0.8)).mul(float(1).sub(snowK));
+  // fibre: cloth, fur and wool catch a soft rim of light; snow on them a brighter one
+  const fibre = cloth.add(is("fur")).min(1);
+  m.sheenNode = mix(base.mul(1.6).add(0.06), vec3(0.4, 0.42, 0.45), snowK).mul(fibre.max(snowK));
+  m.sheenRoughnessNode = mix(float(0.55), float(0.35), is("fur"));
   // relief: the weave on cloth, the grain on leather, clumps in the snow
   const h = weave
     .mul(0.0012)
@@ -406,9 +411,12 @@ export function makeWanderers(
       trudge: move * trudge,
       run: move * run,
     };
-    // the gait's phase is the ground covered over the blended cycle's length
-    const cycle = (CYCLE.walk * w.walk + CYCLE.run * w.run + CYCLE.trudge * w.trudge) / Math.max(1e-3, move);
-    f.phase = (f.phase + (speed * dt) / cycle) % 1;
+    // the gait's phase is the ground covered over the blended cycle's length (standing still, the
+    // phase waits where it was)
+    if (move > 1e-3) {
+      const cycle = (CYCLE.walk * w.walk + CYCLE.run * w.run + CYCLE.trudge * w.trudge) / move;
+      f.phase = (f.phase + (speed * dt) / Math.max(0.5, cycle)) % 1;
+    }
     f.idleT += dt;
     for (const name of clipNames) {
       const a = f.acts[name];
