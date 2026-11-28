@@ -32,6 +32,7 @@ import {
   screenCoordinate,
   screenUV,
   smoothstep,
+  texture,
   uniform,
   vec2,
   vec3,
@@ -52,6 +53,8 @@ export function makePost(
   camera: THREE.PerspectiveCamera,
   mood: MoodState,
   v: Video,
+  /** the shared detail noise (textures.ts), for the frost's ice */
+  detail: THREE.Texture,
 ) {
   const pipe = new THREE.RenderPipeline(renderer);
   pipe.outputColorTransform = false;
@@ -88,6 +91,8 @@ export function makePost(
   const aspect = uniform(1);
   const camNear = uniform(camera.near),
     camFar = uniform(camera.far);
+  /** how cold the body is, 0 warm .. 1 freezing (main.ts, from the warmth) */
+  const frost = uniform(0);
 
   let aoTex: THREE.TextureNode | null = null;
   if (v.ao > 0) {
@@ -168,6 +173,23 @@ export function makePost(
     // split tone: shadows lean cold steel, highlights a little warm, so a fire or a lit window is
     // the warmest thing in a cold frame
     t.mulAssign(mix(vec3(0.93, 0.98, 1.06), vec3(1.03, 1.0, 0.96), smoothstep(0.06, 0.6, l)));
+    // the cold, when the body is losing it: the colour drains toward steel, and rime grows in from
+    // the edges of the view, needles of ice reaching inward over a milky frost, further the colder
+    // it gets. The needles are the ridge noise laid out around the centre (angle, radius), so they
+    // point at it; three turns of the texture around, so the seam at the left matches.
+    const sq = screenUV.sub(0.5).mul(vec2(aspect, 1));
+    const r = sq.length();
+    const ang = sq.y.atan(sq.x).div(Math.PI * 2);
+    const needles = texture(detail, vec2(ang.mul(3), r.mul(0.7))).w;
+    const fine = texture(detail, vec2(ang.mul(9), r.mul(2.1)).add(0.4)).w;
+    const milk = texture(detail, sq.mul(1.3)).x;
+    const reach = r.mul(1.25).add(milk.sub(0.5).mul(0.3)).add(needles.mul(0.22)).add(fine.mul(0.08));
+    const rime = smoothstep(float(1.1).sub(frost.mul(0.45)), float(1.32).sub(frost.mul(0.4)), reach).mul(
+      frost.min(1),
+    );
+    const iceCol = vec3(0.78, 0.85, 0.92).mul(needles.mul(0.3).add(fine.mul(0.2)).add(0.7));
+    t.assign(mix(t, vec3(l).mul(vec3(0.9, 0.96, 1.06)), frost.mul(0.4)));
+    t.assign(mix(t, iceCol, rime.mul(needles.mul(0.35).add(0.45))));
     const s = pow(t.max(0), vec3(1 / 2.2)) as unknown as V3;
     const n = interleavedGradientNoise(screenCoordinate.xy)
       .add(interleavedGradientNoise(screenCoordinate.xy.add(37)))
@@ -257,6 +279,10 @@ export function makePost(
     /** Frame time to hold: the display's refresh or the frame-rate cap, whichever is slower (main.ts). */
     set target(ms: number) {
       target = ms;
+    },
+    /** How cold the body is, 0..1: the frost over the view. */
+    set frost(k: number) {
+      frost.value = k;
     },
     dispose() {
       for (const o of owned) o.dispose();

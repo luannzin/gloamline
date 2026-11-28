@@ -198,7 +198,7 @@ async function boot() {
   /** The frame time dynamic resolution holds: the display's refresh, or the cap when it's slower. */
   const budget = (fps: number) => Math.max(1000 / 240, refresh, fps ? 1000 / fps : 0);
   const lens = (v: Video) => {
-    const p = makePost(renderer, scene, camera, mood, v);
+    const p = makePost(renderer, scene, camera, mood, v, detail);
     p.target = budget(v.fps);
     return p;
   };
@@ -556,7 +556,8 @@ async function boot() {
     const y = heightAt(world.ground.height, px, pz) - trails.depthAt(px, pz) * 0.6;
     puffs.kick(px, y, pz, Math.sin(heading), -Math.cos(heading), depth, hard);
   }
-  let breathT = 1;
+  let breathT = 1,
+    frost = 0;
 
   let last = performance.now(),
     due = 0,
@@ -636,6 +637,9 @@ async function boot() {
         lobby.send(player.pos.x, player.pos.y, player.pos.z, player.yaw, lanternOn);
       }
     }
+    // the cold, seen: frost over the view as the warmth runs out (gone in the menu's shot)
+    frost += ((playing ? Math.max(0, 1 - body.v.warmth / 0.45) : 0) - frost) * Math.min(1, dt * 0.8);
+    post.frost = frost;
     post.adapt(dt);
     post.pipe.render();
     frames++;

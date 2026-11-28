@@ -3,11 +3,11 @@
 // the bottom-left over the live shot of you standing in the world; the HUD says nothing until it
 // matters, then says it at a glance from a corner: status top-left, the party top-right, the
 // minimap and the feed bottom-left, the place you've entered in the middle for a moment.
-import { Flame, Footprints, Heart, Radiation } from "lucide-react";
+import { Flame, Footprints, Heart, Radiation, Snowflake } from "lucide-react";
 import {
   type CSSProperties,
-  type ReactNode,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
   useEffect,
   useRef,
   useState,
@@ -622,18 +622,9 @@ function Hud() {
       clearTimeout(b);
     };
   }, []);
-  const cold = Math.max(0, 1 - s.vitals.warmth / 0.5);
+  // (the cold's frost over the view is drawn by the lens: gfx/post.ts)
   return (
     <div className="pointer-events-none fixed inset-0">
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 transition-opacity duration-1000"
-        style={{
-          opacity: cold,
-          background:
-            "radial-gradient(130% 95% at 50% 50%, transparent 52%, rgb(206 226 240 / 0.22) 72%, rgb(226 238 248 / 0.62) 100%)",
-        }}
-      />
       <Status v={s.vitals} peek={peek} />
       <div className="absolute top-5 right-6 flex flex-col items-end gap-3">
         {count > 1 && (
@@ -721,6 +712,8 @@ function Status({ v, peek }: { v: Vitals; peek: boolean }) {
         const x = v[m.key];
         const on = peek || m.shows(x);
         const low = m.key === "rad" ? x > 0.7 : x < 0.25;
+        // losing the warmth: the flame goes out to a snowflake and the bar frosts over
+        const freezing = m.key === "warmth" && x < 0.35;
         return (
           <li
             key={m.key}
@@ -730,14 +723,14 @@ function Status({ v, peek }: { v: Vitals; peek: boolean }) {
             <span
               className={`grid size-6 place-items-center rounded-full border border-rule bg-glass text-frost backdrop-blur-sm ${low ? "hud-alarm" : ""}`}
             >
-              {m.icon}
+              {freezing ? <Snowflake className="size-3" /> : m.icon}
             </span>
             <span className="sr-only">
-              {m.label} {Math.round(x * 100)}%
+              {m.label} {Math.round(x * 100)}%{freezing ? ", freezing" : ""}
             </span>
             <span className={`relative block h-1 w-40 overflow-hidden rounded-full ${m.track}`}>
               <i
-                className={`absolute inset-y-0 left-0 block w-full origin-left rounded-full transition-transform duration-200 ease-out ${m.bar}`}
+                className={`absolute inset-y-0 left-0 block w-full origin-left rounded-full transition-[transform,background-color] duration-700 ease-out ${freezing ? "bg-frost" : m.bar}`}
                 style={{ transform: `scaleX(${x})` }}
               />
             </span>
