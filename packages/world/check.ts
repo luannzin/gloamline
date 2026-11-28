@@ -1,11 +1,14 @@
 // One run, one "ok": the world builds, is deterministic, and its parts hold their contracts.
 import {
   BLOCK,
+  buildDrift,
   buildWorld,
   caveAt,
+  DRIFT,
   HALF,
   HOLLOW,
   HOUSE,
+  HOUSES,
   heightAt,
   KEEP,
   KINDS,
@@ -13,7 +16,9 @@ import {
   NREG,
   POLE,
   PROP,
+  prevailing,
   SEED,
+  Shelter,
   SIZE,
   WATER_Y,
 } from "./src";
@@ -119,4 +124,38 @@ for (let o = 0; o < S.length; o += BLOCK) {
   const inside = Math.abs(dx * c - dz * s) < S[o + 3] / 2 && Math.abs(dx * s + dz * c) < S[o + 5] / 2;
   assert(!inside, "spawn is clear of walls");
 }
+
+// the drifts: the same every build, bare under the roofs, banked where the wind meets a house and
+// scoured behind it; and a body in a house's lee is out of the wind
+const D = w.drift;
+const again = buildDrift(height, w.solid, V.houses, SEED);
+assert(
+  again.every((v, i) => v === D[i]),
+  "deterministic drifts",
+);
+const [wx, wz] = prevailing(SEED);
+const depth = (x: number, z: number) => D[Math.round(z + HALF) * SIZE + Math.round(x + HALF)] / DRIFT;
+const shelter = new Shelter(w),
+  sh = new Float32Array(2);
+let banked = 0,
+  scoured = 0,
+  lee = 0;
+const nh = V.houses.length / HOUSE;
+for (let i = 0; i < V.houses.length; i += HOUSE) {
+  const H = HOUSES[V.houses[i + 4]];
+  const x = V.houses[i] + Math.sin(V.houses[i + 3]) * H.oz,
+    z = V.houses[i + 2] + Math.cos(V.houses[i + 3]) * H.oz,
+    r = Math.hypot(H.w, H.d) / 2 + 1.5;
+  assert(depth(x, z) === 0, "no snow under a roof");
+  if (depth(x - wx * r, z - wz * r) > 1.05) banked++;
+  if (depth(x + wx * r, z + wz * r) < 0.5) scoured++;
+  const gx = x + wx * r,
+    gz = z + wz * r;
+  if (shelter.at(gx, heightAt(height, gx, gz), gz, wx, wz, 0.5, sh)[1] > 0.5) lee++;
+}
+console.log(`drifts      ${banked}/${nh} banked, ${scoured}/${nh} scoured, ${lee}/${nh} in the lee`);
+assert(
+  banked > nh * 0.6 && scoured > nh * 0.6 && lee > nh * 0.6,
+  "the wind shapes the snow round the houses",
+);
 console.log("ok");

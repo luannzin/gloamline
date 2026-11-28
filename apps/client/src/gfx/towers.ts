@@ -32,7 +32,7 @@ import { type Models, model } from "./models";
 
 type V4 = ReturnType<typeof vec3> & { w: ReturnType<typeof float> };
 
-/** One instanced mesh: position + yaw in one vec4, scale in another. */
+/** One instanced mesh: position + yaw in one vec4, scale (and a free eighth number) in another. */
 export function placedMesh(
   geo: THREE.BufferGeometry,
   rows: number[][],
@@ -42,7 +42,7 @@ export function placedMesh(
     b = new Float32Array(rows.length * 4);
   rows.forEach((r, i) => {
     a.set([r[0], r[1], r[2], r[3]], i * 4);
-    b.set([r[4], r[5], r[6], 0], i * 4);
+    b.set([r[4], r[5], r[6], r[7] ?? 0], i * 4);
   });
   const A = instancedBufferAttribute(new THREE.InstancedBufferAttribute(a, 4), "vec4") as unknown as V4;
   const S = instancedBufferAttribute(new THREE.InstancedBufferAttribute(b, 4), "vec4") as unknown as V4;

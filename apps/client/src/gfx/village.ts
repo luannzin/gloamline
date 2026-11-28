@@ -3,7 +3,9 @@
 // every piece by the material its script wrote into COLOR_0.r (`sway` after models.ts): weathered
 // logs and boards, trim painted a colour per house and peeling, galvanised iron gone to rust,
 // window glass lit warm in the houses someone still lives in, stone and brick; snow on every top.
-import { HOUSE, HOUSES, POLE, PROP, PROPS, WIRES, type World } from "@zimovye/world";
+// Which houses are lived in is the world's (the same for everyone); their windows' places are read
+// off the glass in the meshes, for the snow they light (particles.ts).
+import { HOUSE, HOUSES, hash2, POLE, PROP, PROPS, WIRES, type World } from "@zimovye/world";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   attribute,
@@ -36,7 +38,8 @@ export function makeVillage(world: World, models: Models, detail: THREE.Texture,
   const group = new THREE.Group();
   const V = world.village;
 
-  const material = (A: Parameters<Parameters<typeof placedMesh>[2]>[0]) => {
+  type V4 = Parameters<Parameters<typeof placedMesh>[2]>[0];
+  const material = (A: V4, S: V4) => {
     const m = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide });
     m.positionNode = turn(positionLocal as never, A.w).add(A.xyz);
     const nw = turn(normalLocal as never, A.w);
@@ -72,8 +75,8 @@ export function makeVillage(world: World, models: Models, detail: THREE.Texture,
     const rust = smoothstep(0.35, 0.75, big.mul(0.8).add(n1.mul(0.5)).add(seed.mul(0.3)));
     const carPaint = mix(color(0x6d8a92), color(0x8f8770), step(0.5, seed)).mul(0.3);
     const iron = mix(mix(color(0x4a4e52), carPaint, flag).mul(0.5), color(0x3a1a0c).mul(0.55), rust);
-    // glass: dark, and warm from inside where someone lives (two houses in three)
-    const home = step(0.33, seed).mul(flag);
+    // glass: dark, and warm from inside where someone lives (S.w: two houses in three)
+    const home = S.w.mul(flag);
     const glass = color(0x050708);
     // field stone, and brick with its courses
     const mortar = smoothstep(0.1, 0.0, fract(wp.y.mul(13.3)));
@@ -113,14 +116,25 @@ export function makeVillage(world: World, models: Models, detail: THREE.Texture,
 
   const place = (rows: number[][], name: string) => {
     if (!rows.length) return;
-    group.add(placedMesh(model(models, name), rows, (A) => material(A)));
+    group.add(placedMesh(model(models, name), rows, material));
   };
-  // houses by kind
+  // houses by kind, two in three lived in (never the burnt one); each lit pane's centre: x, y, z
   const H = V.houses;
+  const windows: number[] = [];
   for (let k = 0; k < HOUSES.length; k++) {
     const rows: number[][] = [];
-    for (let i = 0; i < H.length; i += HOUSE)
-      if (H[i + 4] === k) rows.push([H[i], H[i + 1], H[i + 2], H[i + 3], 1, 1, 1]);
+    const panes = glass(model(models, HOUSES[k].name));
+    for (let i = 0; i < H.length; i += HOUSE) {
+      if (H[i + 4] !== k) continue;
+      const lit = k !== 3 && hash2(i / HOUSE, 41, world.seed) > 0.33 ? 1 : 0;
+      rows.push([H[i], H[i + 1], H[i + 2], H[i + 3], 1, 1, 1, lit]);
+      if (!lit) continue;
+      // (placed meshes turn local +z to (sin yaw, cos yaw): towers.ts)
+      const c = Math.cos(H[i + 3]),
+        s = Math.sin(H[i + 3]);
+      for (const [x, y, z] of panes)
+        windows.push(H[i] + c * x + s * z, H[i + 1] + y, H[i + 2] - s * x + c * z);
+    }
     place(rows, HOUSES[k].name);
   }
   const P = V.props;
@@ -179,5 +193,54 @@ export function makeVillage(world: World, models: Models, detail: THREE.Texture,
     group.add(wires);
     for (const t of tubes) t.dispose();
   }
-  return group;
+  return { group, windows: new Float32Array(windows) };
+}
+
+/** The centres of the panes of glass that can be lit in a house's mesh (village.py: material 0.8, flagged). */
+function glass(g: THREE.BufferGeometry) {
+  const pos = g.attributes.position,
+    id = g.attributes.sway,
+    flag = g.attributes.extra;
+  const isPane = (i: number) => Math.abs(id.getX(i) - 0.8) < 0.05 && flag.getX(i) > 0.5;
+  // a pane is one box: its vertices joined by its triangles, and by sharing a corner (the export
+  // splits each corner per face)
+  const up = new Int32Array(pos.count).map((_, i) => i);
+  const root = (i: number): number => {
+    if (up[i] !== i) up[i] = root(up[i]);
+    return up[i];
+  };
+  const join = (a: number, b: number) => {
+    up[root(a)] = root(b);
+  };
+  const ix = g.index;
+  if (ix)
+    for (let t = 0; t < ix.count; t += 3) {
+      const a = ix.getX(t),
+        b = ix.getX(t + 1),
+        c = ix.getX(t + 2);
+      if (isPane(a) && isPane(b) && isPane(c)) {
+        join(a, b);
+        join(b, c);
+      }
+    }
+  const corner = new Map<string, number>();
+  for (let i = 0; i < pos.count; i++) {
+    if (!isPane(i)) continue;
+    const key = `${Math.round(pos.getX(i) * 1000)},${Math.round(pos.getY(i) * 1000)},${Math.round(pos.getZ(i) * 1000)}`;
+    const j = corner.get(key);
+    if (j === undefined) corner.set(key, i);
+    else join(i, j);
+  }
+  const sums = new Map<number, number[]>();
+  for (let i = 0; i < pos.count; i++) {
+    if (!isPane(i)) continue;
+    const r = root(i);
+    const s = sums.get(r) ?? [0, 0, 0, 0];
+    s[0] += pos.getX(i);
+    s[1] += pos.getY(i);
+    s[2] += pos.getZ(i);
+    s[3]++;
+    sums.set(r, s);
+  }
+  return [...sums.values()].map(([x, y, z, n]) => [x / n, y / n, z / n]);
 }

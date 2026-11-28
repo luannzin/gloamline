@@ -1,6 +1,6 @@
 // Every texture is made here at load: the ground data from the world build, one tileable detail
 // noise that every material samples at several scales, and a foliage atlas drawn on a canvas.
-import { rng, SIZE, WEAR, type World } from "@zimovye/world";
+import { prevailing, rng, SIZE, WEAR, type World } from "@zimovye/world";
 import * as THREE from "three/webgpu";
 
 export function groundTextures(w: World) {
@@ -21,11 +21,19 @@ export function groundTextures(w: World) {
   wear.minFilter = THREE.LinearMipmapLinearFilter;
   wear.generateMipmaps = true;
   wear.needsUpdate = true;
+  // how deep the snow lies against the walls and behind them (world: wind.ts), DRIFT the snow's own
+  const drift = new THREE.DataTexture(w.drift, SIZE, SIZE, THREE.RedFormat, THREE.UnsignedByteType);
+  drift.magFilter = THREE.LinearFilter;
+  drift.minFilter = THREE.LinearFilter;
+  drift.needsUpdate = true;
   return {
     height,
     ground0: rgba(w.ground.ground0),
     ground1: rgba(w.ground.ground1),
     wear,
+    drift,
+    /** the prevailing wind, downwind (x, z): the snow's ripples lie across it */
+    wind: prevailing(w.seed),
     canopy: canopyTexture(w),
     stones: stoneTexture(),
   };

@@ -21,6 +21,7 @@ import {
   sampleRoads,
 } from "./terrain";
 import { buildVillage } from "./village";
+import { buildDrift } from "./wind";
 
 export * from "./cave";
 export * from "./erosion";
@@ -29,6 +30,7 @@ export * from "./ruins";
 export * from "./scatter";
 export * from "./terrain";
 export * from "./village";
+export * from "./wind";
 
 export const SEED = 20261127;
 
@@ -93,6 +95,9 @@ export function finishWorld(
   const solid = new Float32Array(ruins.length + village.blocks.length);
   solid.set(ruins);
   solid.set(village.blocks, ruins.length);
+  log("Drifting the snow…");
+  // how deep the snow lies, a byte a metre (wind.ts): banked on the walls the wind meets, bare behind
+  const drift = buildDrift(ground.height, solid, village.houses, seed);
   return {
     seed,
     ground,
@@ -105,6 +110,7 @@ export function finishWorld(
     village,
     solid,
     props,
+    drift,
     spawn,
   };
 }

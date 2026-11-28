@@ -2,12 +2,13 @@
 // doing, then runs behind the menu, framed on you standing in it, so shaders compile and resolution
 // settles before anyone walks in (DESIGN.md: the world is the menu).
 import "./style.css";
-import { COLUMN, HALF, HOLLOW, heightAt, Land, NREG, REGIONS, SIZE } from "@zimovye/world";
+import { COLUMN, DRIFT, HALF, HOLLOW, heightAt, Land, NREG, REGIONS, Shelter, SIZE } from "@zimovye/world";
 import * as THREE from "three/webgpu";
 import { randomName, randomSeed } from "@/lib/party";
 import { makeBody } from "./body";
 import { buildWorld } from "./build";
 import { makeColumn } from "./gfx/column";
+import { makeCover, roofs } from "./gfx/cover";
 import { makeFlora } from "./gfx/flora";
 import { makeGrass } from "./gfx/grass";
 import { loadModels, loadRig } from "./gfx/models";
@@ -123,7 +124,7 @@ async function boot() {
   const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 3200);
   const tex = groundTextures(world);
   const detail = detailTexture();
-  const wind = makeWind();
+  const wind = makeWind(world.seed);
   const mood = makeMood(land, world, detail, want.shadows, want.sky > 0, wind);
   scene.add(mood.sun, mood.sun.target, mood.hemi, mood.dome);
   scene.fogNode = mood.fogNode;
@@ -140,14 +141,17 @@ async function boot() {
     wind,
     puffs,
   );
+  const village = makeVillage(world, models, detail, mood);
+  // (what roofs the ground keeps the snow off what's under it: gfx/cover.ts)
   scene.add(
-    makeRuins(world, detail),
-    makeCave(world, detail),
+    roofs(makeRuins(world, detail)),
+    roofs(makeCave(world, detail)),
     makeColumn(world, detail, mood),
-    makeTowers(world, models, detail),
-    makeVillage(world, models, detail, mood),
+    roofs(makeTowers(world, models, detail)),
+    roofs(village.group),
     wanderers.group,
   );
+  const cover = makeCover(renderer, scene, wind);
 
   // What the video details change (video.ts), built apart so a change rebuilds only this, in place,
   // the world and the models kept: the ground's shading, the props' reach, the grass, the weather,
@@ -158,7 +162,7 @@ async function boot() {
     const terrain = makeTerrain(tex, detail, mood, v.shadows, trails, v.distance);
     const flora = makeFlora(world, { ground0: tex.ground0, detail, atlas }, mood, v.distance, models);
     const grass = v.grass > 0 ? makeGrass(tex, detail, mood, v.grass, trails) : null;
-    const particles = makeParticles(tex.height, mood, wind, v.effects);
+    const particles = makeParticles(tex.height, mood, wind, v.effects, cover);
     const group = new THREE.Group().add(
       terrain.group,
       flora.group,
@@ -172,6 +176,7 @@ async function boot() {
       group,
       /** the specks, drawn over the settled image (overlay.ts) */
       fx: particles.group,
+      particles,
       sky() {
         if (pmrem && mood.envDue()) {
           envRT = pmrem.fromScene(mood.skyScene, 0, 1, 3000, { size: 256, renderTarget: envRT as never });
@@ -185,6 +190,7 @@ async function boot() {
         camera.updateMatrixWorld();
         flora.update(camera);
         grass?.update(camera.position);
+        cover.update(camera.position);
         particles.update(camera, canvas.height);
       },
       dispose() {
@@ -225,7 +231,8 @@ async function boot() {
   let lanternOn = true;
 
   // how deep the snow is under (x, z), 0..1: the mood's snow on ground that's near level, none on
-  // the roads (trodden) or under the mine's rock. The shader's patches aren't counted: close enough.
+  // the roads (trodden) or under the mine's rock, banked against walls and bare behind them (the
+  // drifts: world wind.ts). The shader's patches aren't counted: close enough.
   const G1 = world.ground.ground1;
   function snowDepth(x: number, z: number) {
     const i = Math.min(SIZE - 1, Math.max(0, Math.round(x + HALF))),
@@ -235,8 +242,15 @@ async function boot() {
       nz = G1[o + 3] / 127.5 - 1;
     const ny = Math.sqrt(Math.max(0, 1 - nx * nx - nz * nz));
     const flat = Math.min(1, Math.max(0, (ny - 0.75) / 0.17));
-    return mood.u.snow.value * mood.u.open.value * flat * (1 - G1[o + 1] / 255);
+    const drift = world.drift[j * SIZE + i] / DRIFT;
+    return Math.min(1, mood.u.snow.value * mood.u.open.value * flat * (1 - G1[o + 1] / 255) * drift);
   }
+  // what keeps the snow and the wind off a body at (x, y, z) (feet): cover, lee into `out`
+  const shelter = new Shelter(world);
+  const shelterAt = (x: number, y: number, z: number, out: Float32Array) => {
+    shelter.at(x, y, z, wind.u.dir.value.x, wind.u.dir.value.y, wind.slant(), out);
+  };
+  const sheltered = new Float32Array(2);
   /**
    * How much fresh snow is in the way at (x, z), 0..1: the depth, less what's already pressed there
    * (a trench someone ploughed is firm going: trails.ts).
@@ -258,6 +272,24 @@ async function boot() {
   );
   const stage = makeStage(camera, (x, z) => heightAt(world.ground.height, x, z));
 
+  // what warms the snow in the air near it (particles.ts): every lit lantern, then the lit windows
+  // within 15 m of the camera (as many as fit); strongest in the dark
+  const LAMP = new THREE.Color(0xffb066),
+    PANE = new THREE.Color(1.0, 0.5, 0.2);
+  const W = village.windows,
+    at = new THREE.Vector3();
+  let dark = 1;
+  const pushBody = (x: number, y: number, z: number) => d.particles.body(x, y, z, 1.8, 0.32);
+  const pushLamp = (p: THREE.Vector3, k: number) => d.particles.light(p, 9, LAMP, 2.2 * k * dark);
+  function warmSnow() {
+    dark = Math.min(1, Math.max(0.2, 1.6 - mood.u.sunPower.value));
+    wanderers.each(pushBody, pushLamp);
+    if (lantern.intensity > 0.05) pushLamp(lantern.position, lantern.intensity / 9);
+    for (let i = 0; i < W.length; i += 3)
+      if ((W[i] - camera.position.x) ** 2 + (W[i + 2] - camera.position.z) ** 2 < 225)
+        d.particles.light(at.set(W[i], W[i + 1], W[i + 2]), 4.5, PANE, 1.2 * dark);
+  }
+
   const v = VIEWS[0];
   player.teleport(v[0], v[1], v[2], v[3], v[4]);
   // (dev: a camera held at an offset from the body, for looking at it: __game.look)
@@ -275,6 +307,7 @@ async function boot() {
     mood.update(camera.position, dt);
     wind.update(dt, mood.u.snowfall.value);
     d.sky();
+    warmSnow();
     d.update();
     // the lens holds the body sharp (its chest; in first person, the eyes: the world past them softens)
     chest.set(player.pos.x, player.pos.y - player.sunk + 1.3, player.pos.z);
@@ -312,6 +345,8 @@ async function boot() {
         dressed = v;
         scene.add(d.group);
         overlay.add(d.fx);
+        // the new crowns are roofs too
+        cover.invalidate();
       }
     } finally {
       settling = null;
@@ -546,6 +581,8 @@ async function boot() {
       cold: mood.u.snowfall.value,
       lantern: lanternOn,
       bad: mood.u.fireflies.value,
+      cover: sheltered[0],
+      lee: sheltered[1],
     });
     if (down) {
       body.reset();
@@ -590,6 +627,9 @@ async function boot() {
     cold: 0,
     pitch: 0,
     spent: 0,
+    cover: 0,
+    lee: 0,
+    snow: 0,
   };
 
   let last = performance.now(),
@@ -616,6 +656,8 @@ async function boot() {
     if (phase() === "entering" && stage.k >= 1) ui.set({ phase: "playing" });
     const playing = phase() === "playing";
     tick(dt, playing);
+    // what's over you and upwind of you, for the snow on the coat and the cold
+    shelterAt(player.pos.x, player.pos.y - player.sunk, player.pos.z, sheltered);
     if (playing) {
       areaCheck();
       vitals(dt);
@@ -645,6 +687,9 @@ async function boot() {
     doing.cold = Math.max(0, 1 - body.v.warmth / 0.4);
     doing.pitch = player.pitch;
     doing.spent = Math.max(1 - body.v.stamina, player.running ? 0.6 : 0);
+    doing.cover = sheltered[0];
+    doing.lee = sheltered[1];
+    doing.snow = body.snow;
     wanderers.self(me.seed, doing, player.behind > 0.3 || stage.k < 0.75);
     live();
     marksT += dt;
@@ -653,7 +698,7 @@ async function boot() {
       others();
     }
     if (lobby) {
-      wanderers.update(lobby.people, trails.depthAt, fresh);
+      wanderers.update(lobby.people, trails.depthAt, fresh, shelterAt);
       sendT += dt;
       if (sendT > 1 / 15) {
         sendT = 0;

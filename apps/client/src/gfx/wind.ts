@@ -3,15 +3,18 @@
 // follows the snowfall (a blizzard blows), and gusts: bands of stronger air travelling downwind.
 // The snow needs to know how far the air has carried it, not only how fast it moves now, so the
 // distance blown is integrated here (`travel`) and a change of strength never makes a flake jump.
+// It wanders round the season's prevailing wind (world: wind.ts), the one the drifts were laid by.
+import { prevailing } from "@zimovye/world";
 import { Fn, sin, uniform, vec2 } from "three/tsl";
 import * as THREE from "three/webgpu";
 
 type Node2 = THREE.Node<"vec2">;
 
-export function makeWind() {
+export function makeWind(seed: number) {
+  const [px, pz] = prevailing(seed);
   const u = {
     /** downwind, on the ground (unit) */
-    dir: uniform(new THREE.Vector2(0.8, 0.6)),
+    dir: uniform(new THREE.Vector2(px, pz)),
     /** metres a second, gusts not counted */
     speed: uniform(2),
     /** how far the air has moved since the start, metres (x, z) */
@@ -19,7 +22,7 @@ export function makeWind() {
     /** seconds, for the gusts (the renderer's `time` stops while hidden; this doesn't drift from travel) */
     t: uniform(0),
   };
-  let angle = Math.atan2(0.6, 0.8),
+  let angle = Math.atan2(pz, px),
     speed = 2;
 
   /**
@@ -59,6 +62,13 @@ export function makeWind() {
     u,
     gust,
     at,
+    /**
+     * How far downwind the snow drifts for each metre it falls, as the roofs and walls see it: the
+     * flakes' own slant, held under 50° so a porch roof still keeps the snow off what's under it.
+     */
+    slant() {
+      return Math.min(1.2, (speed / 1.3) * 0.5);
+    },
     /** Eases toward the weather: `snowfall` 0..1 (the mood's), a blizzard at 1. */
     update(dt: number, snowfall: number) {
       u.t.value += dt;

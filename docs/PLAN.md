@@ -35,32 +35,44 @@ How it's checked (abyssal-garden's gate): frames at the nine viewpoints and the 
 (`__game.shot`, `__game.look`, `__game.post.pin(1)` at 1280x720), reviewed by a critic that sees only
 the images and the references; iterate until nothing above minor is left.
 
-What the last review left, most damaging first:
+The order (November 2026), each step with its gameplay:
 
-1. **Trees.** Spruces read as stacked horizontal tiers with a stepped outline, and their snowy upper
-   faces show as a white "ghost twin" beside the dark tree from the side. Trunks are plain; oak crowns
-   are blobs with no limbs showing. Want: drooping layered boughs with gaps, snow sitting on the
-   boughs, round barked trunks flaring into the snow, limbs visible under the clumps
-   (`tools/blender/trees.py`, `gfx/flora.ts`).
-2. **The survivor up close.** The coat reads smooth: no stitching, seams or folds at a metre. Next:
-   give the meshes UVs, bake normal and occlusion maps from a finer, sculpted version (quilting
-   stitches, seams, creases at the elbows and knees, worn leather) with Cycles, sample them in
-   `gfx/wanderers.ts`. Then cloth weight: the coat's skirt and the ushanka's flaps on bones of their
-   own, swinging like the lantern. Hands are still generic gloves.
-3. **The Column.** A hard-edged cylinder with scrolling noise; it lights nothing. Want a turbulent
-   column with a soft frayed edge, an anvil spreading at altitude, and orange light on the snow and the
-   clouds beneath (`gfx/column.ts`).
-4. **Mountains and cliffs.** Backdrops facet like crumpled foil; cliffs smear. Want eroded ridgelines
-   with strata, snow on the ledges, and plumes blown off the crests.
-5. **Buildings.** Cabins are boxes: want eaves, sagging snow loads, icicles, window light pooling on the
-   snow; the ostrog's bricks are oversized and its gate beam floats (`tools/blender/village.py`,
-   `architecture.py`).
-6. **Ground cover.** Grass and reeds still sit on a visible lattice in places; want sparse clumps of
-   bent dry sedge, mostly buried, thinning on ridges (`gfx/grass.ts`).
-7. **Colour.** The Ostrog's dusk turns everything maroon and some night views go sepia; snow should
-   stay the brightest surface, warm only in small accents (`gfx/mood.ts`).
+0. **Snow that hits the world.** Done (November 2026): a cover map (`gfx/cover.ts`, a 512² depth
+   map down the wind-tilted snowfall, 48 m round the camera, of the village, keep, mine and crowns,
+   redrawn after a 4 m move or a wind turn) hides flakes under cover and splats them on roofs; eight
+   body capsules part the snow and leave a wake; lanterns and the nearest lit windows warm the flakes
+   (`gfx/particles.ts`). Drifts and shelter are the world's (`packages/world/src/wind.ts`): the
+   prevailing wind from the seed, banks on windward walls, a scoured lee, clear eaves, read by
+   `snowDepth` and the terrain; snow on the body builds in the open, stops under cover, and
+   chills; a wall's lee cuts the wind (`body.ts`). Left for later: fires to melt it off (none exist
+   yet; braziers come with the buildings).
+1. **Trees and ground cover.** Spruces read as stacked tiers, and each pine card's one normal turns
+   the whole up-tilted card white: a "ghost twin" beside the tree (`gfx/flora.ts`, `gfx/shapes.ts`).
+   Want drooping layered boughs with gaps, snow as its own geometry on the boughs, a barked trunk
+   flaring into the snow, LODs and an impostor (`tools/blender/trees.py`); oaks with limbs under the
+   clumps, holding dead brown leaves. Brushing a spruce or a gust drops snow off a bough, which springs
+   up bare. Grass and sedge in random clumps, mostly buried: how much shows tells how deep the snow
+   ahead is (`gfx/grass.ts`).
+2. **Survivor cloth.** The coat's skirt and the ushanka's flaps on bones of their own, swung by
+   `wind.at` like the lantern.
+3. **Buildings.** Eaves, heavy roof snow with a cornice curling over, icicles, chimney smoke, window
+   light pooling on the snow; the ostrog's bricks at the right size, its gate beam seated
+   (`tools/blender/village.py`, `architecture.py`). A lit window marks shelter at night; a gust now
+   and then slides snow off a roof.
+4. **The Column.** A soft, frayed volume, a top spreading into the cloud layer, orange light beneath
+   on the clouds and the snow facing it, a slow flicker (`gfx/column.ts`, `gfx/mood.ts`). At night it
+   is the way home.
+5. **Mountains and cliffs.** Strata in the cliff shader, snow on the ledges, plumes off the crests from
+   ridge points found in the heightmap, showing the wind.
+6. **The survivor up close.** UVs, normal and occlusion maps baked in Cycles (quilting, seams,
+   creases, worn leather), sampled in `gfx/wanderers.ts`; real mittens and hands.
+7. **Colour**, after the Column's light. Snow stays the brightest surface, warm only in small accents;
+   fixes the Ostrog's maroon dusk and the sepia nights (`gfx/mood.ts`).
 8. **The creature.** The Shatun (docs/CHARACTERS.md) comes with combat (phase 3); its references are
    in `refs/creature/`.
+
+After each step: the nine viewpoints and a close-up, a critic pass, and the frame budget held on
+Medium (5700U).
 
 What the player asked to keep: the camera steady over the shoulder (no head bob there), the HUD soft
 in the snow (the frost only at the edges, only when freezing), the snow slowing and holding the body.

@@ -35,6 +35,7 @@ import {
 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import { bump } from "./bump";
+import { COVER } from "./cover";
 import { type Models, model } from "./models";
 import type { MoodState } from "./mood";
 import * as S from "./shapes";
@@ -286,6 +287,8 @@ type Spec = {
   lodAt: number;
   radius: number;
   shadow: boolean;
+  /** its crown keeps the snow off what's under it (cover.ts) */
+  roof?: boolean;
 };
 
 /** `distance`: the view distance setting (video.ts), 0..3: how far each kind reaches and keeps detail */
@@ -313,6 +316,7 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, distance: numbe
       lodAt: [35, 45, 70, 110][q],
       radius: 14,
       shadow: true,
+      roof: true,
       // grown in Blender (tools/blender/trees.py)
       variants: range(4).map((i) => {
         const g = (part: string, lod: number) => model(models, `oak${i}_${part}_lod${lod}`);
@@ -335,6 +339,7 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, distance: numbe
       lodAt: [50, 60, 100, 130][q],
       radius: 10,
       shadow: true,
+      roof: true,
       variants: range(3).map((i) => {
         const nr = S.pine(200 + i, false),
           fr = S.pine(200 + i, true);
@@ -431,6 +436,8 @@ export function makeFlora(world: World, t: Tex, mood: MoodState, distance: numbe
           mesh.frustumCulled = false;
           mesh.castShadow = spec.shadow && near;
           mesh.receiveShadow = true;
+          // (the cover map's 24 m reach sits inside every near range)
+          if (spec.roof && near) mesh.layers.enable(COVER);
           mesh.count = 0;
           group.add(mesh);
           return mesh;

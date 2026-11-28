@@ -28,6 +28,7 @@ self.onmessage = (e: MessageEvent<In>) => {
     w.cave.indices.buffer,
     w.ruins.buffer,
     w.towers.buffer,
+    w.drift.buffer,
     ...Object.values(w.props).map((p) => p.buffer),
     ...w.roads.map((r) => r.buffer),
   ];

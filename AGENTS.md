@@ -9,6 +9,7 @@ Three.js r187 (WebGPU, TSL), React + coss ui for the interface, Trystero for the
 | What is the world made of, and where? | `packages/world/src` (pure functions of the seed; no DOM, no Three.js) |
 | How does a frame get drawn? | `apps/client/src/gfx/*` (one file per system), `apps/client/src/main.ts` (wiring and loop) |
 | What does each region look like? | `apps/client/src/gfx/mood.ts` (`MOODS`) |
+| Where does the snow pile, and what keeps it off? | `packages/world/src/wind.ts` (the prevailing wind, drifts, `Shelter`), `apps/client/src/gfx/cover.ts` (the flakes' roof map) |
 | How does it look and read? | `DESIGN.md` (and `docs/REFERENCES.md` for the board behind it) |
 | What's planned, and why this stack? | `docs/PLAN.md` |
 | Who is the survivor, what gear and colours, what is the creature? | `docs/CHARACTERS.md` |

@@ -41,21 +41,15 @@ either side of it. The tab's icon is the mark in frost on a soot tile. The paths
 ## The world is the menu
 
 - The game runs behind every screen. It opens the way Crimson Desert's does (refs/crimson-desert/),
-  in its own colours: a studio card, BY LUAN in white Oswald tracked wide on black, out of the dark
-  and back into it, under a film grain that stays for the whole intro; then the title, ZIMO, the
-  mark, VYE, in frost in the winter air. Three slanted planes of air arrive on the wind from the
-  right, each paler than the one before (the air in layers, as below: the further off, the paler),
-  paler at the top as fog lit from the sky, their cut edges catching the light; they drift at their
-  own paces, so the lines between them keep shifting, and snow blows past at three depths along the
-  same slant. The mark draws itself (the ring round from north, the roof and the logs settling into
-  it, the window lit like a lamp catching) and the name comes out of it letter by letter, the
-  nearest first. Along the bottom, over a dark foot: what's being built ("Raising the land…") and
-  the real progress, a tip about surviving the district that changes every few seconds, and the
-  progress as a hairline whose head is a small breathing light. When the world is ready the window
-  lights warm (the one warm thing, as in the world) and "The zone is ready"; once the mark has
-  finished, the planes are carried off on the wind to the left, the nearest last, its edge the cut
-  that sweeps onto the world. Any key or click skips the studio card, and the title once the world
-  is ready. Reduced motion keeps only the fades.
+  in its own colours, and as plainly as the studio card: BY LUAN in white Oswald tracked wide on
+  black, out of the dark and back into it, under a film grain that stays for the whole intro; then
+  the title the same way, white on black: ZIMO, the mark, VYE. The mark draws itself (the ring round
+  from north, the roof and the logs settling into it, the window lit like a lamp catching) and the
+  name comes out of it letter by letter, the nearest first. Nothing else is on screen but a white
+  hairline along the very bottom edge filling with the real progress. When the world is ready the
+  window lights warm (the one warm thing, as in the world); once the mark has finished, the title
+  blurs out and the black lifts off the world. Any key or click skips the studio card, and the title
+  once the world is ready. Reduced motion keeps only the fades.
 - The menu is a shot of you standing in the world, with no panel over it: from behind and to the
   left of your survivor, the lantern lit, looking out at what they face, so they stand in the right
   third. The camera breathes and leans toward the pointer; the first time, it arrives from high and
@@ -106,6 +100,15 @@ What Elden Ring does, at a browser's budget:
 
 - Snow lies on what faces the sky: thick on flat ground and roofs, a rim on ledges, none on cliffs.
   It thins where wind scours ridges and drifts into hollows (the same noise that moves the mist).
+- The season's wind comes from one side (the seed's), and the snow shows it: banked up against
+  every wall that faces it, scoured to the ground in a strip behind, clear under the eaves (world:
+  `wind.ts`). Banks are deeper going; the lee is easy.
+- The snow in the air meets the world. Nothing falls under a roof or a crown, and the falling snow's
+  slant leaves the lee of every wall clear (`gfx/cover.ts`); a flake reaching a roof flattens and
+  stops. It parts round a body and leaves a clear wake behind it. Lanterns and lit windows light the
+  flakes near them: at night in a blizzard the lantern is a warm sphere of moving snow.
+- Snow builds up on you in the open snowfall, stops under cover and comes off there and, slowly, by
+  your lantern; a coat of it chills you, and standing in a wall's lee keeps the wind off.
 - Roads are trodden: grey slush with ruts and the soil showing.
 - Grass is last summer's: straw, rust and reed heads standing out of the snow.
 - Pines keep their dark needles with snow on the upper side; oaks keep their dead brown leaves.

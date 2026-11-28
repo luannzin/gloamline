@@ -27,6 +27,7 @@ import {
 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import { partyColor } from "@/lib/party";
+import { settle } from "../body";
 import { poseAt, type Remote } from "../net";
 import { bump } from "./bump";
 import type { Rig } from "./models";
@@ -59,6 +60,11 @@ export type Doing = {
   pitch: number;
   /** 0 rested .. 1 out of breath */
   spent: number;
+  /** how much is overhead against the falling snow, and how far out of the wind, 0..1 (world: wind.ts) */
+  cover: number;
+  lee: number;
+  /** snow settled on the body, 0..1 (yours, from body.ts; others' builds up here from `cover`) */
+  snow?: number;
 };
 
 /** Metres covered in one cycle (two steps) of each gait clip, as the capture walked them (survivor.py). */
@@ -344,7 +350,21 @@ export function makeWanderers(
     axis = new THREE.Vector3(),
     fwd = new THREE.Vector3(),
     head = new THREE.Vector3(),
-    s = { x: 0, y: 0, z: 0, yaw: 0, speed: 0, deep: 0, lit: false, cold: 0, pitch: 0, spent: 0 } as Doing;
+    s = {
+      x: 0,
+      y: 0,
+      z: 0,
+      yaw: 0,
+      speed: 0,
+      deep: 0,
+      lit: false,
+      cold: 0,
+      pitch: 0,
+      spent: 0,
+      cover: 0,
+      lee: 0,
+    } as Doing,
+    sheltered = new Float32Array(2);
   const clipNames = [
     "idle",
     "cold",
@@ -624,12 +644,12 @@ export function makeWanderers(
     const open = mood.u.open.value,
       fall = mood.u.snowfall.value;
     const u = f.u;
-    u.snow.value = THREE.MathUtils.clamp(u.snow.value + dt * (fall * open * 0.005 - (1 - open) * 0.02), 0, 1);
+    u.snow.value = d.snow === undefined ? settle(u.snow.value, dt, fall, open, d.cover, d.lit) : d.snow;
     u.caked.value = THREE.MathUtils.clamp(u.caked.value + dt * (f.deep * speed * 0.05 - 0.004), 0, 1);
     u.frost.value += ((self ? d.cold : fall * 0.4) - u.frost.value) * Math.min(1, dt * 0.2);
-    // the air on them: the wind, and the walk's own draught, turned into the figure's space
-    // (the file's +z is the figure's front: turned by yaw and the half turn)
-    const ws = wind.u.speed.value * wind.at(d.x, d.z) * open;
+    // the air on them: the wind (less in a wall's lee), and the walk's own draught, turned into the
+    // figure's space (the file's +z is the figure's front: turned by yaw and the half turn)
+    const ws = wind.u.speed.value * wind.at(d.x, d.z) * open * (1 - 0.7 * d.lee);
     const wx = wind.u.dir.value.x * ws + Math.sin(d.yaw) * speed,
       wz = wind.u.dir.value.y * ws + Math.cos(d.yaw) * speed;
     const ang = -(d.yaw + Math.PI);
@@ -663,11 +683,15 @@ export function makeWanderers(
   }
 
   let lastT = performance.now();
-  /** `sunk`: how far the feet sink into the snow at (x, z), metres; `deep`: fresh snow there, 0..1. */
+  /**
+   * `sunk`: how far the feet sink into the snow at (x, z), metres; `deep`: fresh snow there, 0..1;
+   * `shelter`: what's overhead and upwind of a body at (x, y, z) (cover, lee into `out`).
+   */
   function update(
     people: Map<string, Remote>,
     sunk: (x: number, z: number) => number,
     deep: (x: number, z: number) => number,
+    shelter: (x: number, y: number, z: number, out: Float32Array) => void,
   ) {
     const t = performance.now(),
       dt = Math.min(0.1, Math.max(0.001, (t - lastT) / 1000));
@@ -693,6 +717,9 @@ export function makeWanderers(
       s.cold = 0;
       s.pitch = 0;
       s.spent = 0;
+      shelter(s.x, s.y, s.z, sheltered);
+      s.cover = sheltered[0];
+      s.lee = sheltered[1];
       drive(f, s, dt, false);
       // the name, above the hat, while in front and within 160 m (fading over the last 40)
       v.set(o[0], o[1] + 2.15, o[2]).project(camera);
@@ -704,5 +731,20 @@ export function makeWanderers(
       f.tag.style.transform = `translate(calc(${((v.x + 1) / 2) * innerWidth}px - 50%), ${((1 - v.y) / 2) * innerHeight}px)`;
     }
   }
-  return { group, update, self };
+  /** Each body drawn, as `body(x, y, z)` (feet), and each lit lantern, as `lamp(position, strength)`. */
+  function each(
+    body: (x: number, y: number, z: number) => void,
+    lamp: (p: THREE.Vector3, k: number) => void,
+  ) {
+    for (const f of figures.values()) {
+      if (!f.root.visible) continue;
+      f.root.getWorldPosition(v);
+      body(v.x, v.y, v.z);
+      if (f.light.intensity > 0.05) {
+        f.light.getWorldPosition(v);
+        lamp(v, f.light.intensity / 9);
+      }
+    }
+  }
+  return { group, update, self, each };
 }

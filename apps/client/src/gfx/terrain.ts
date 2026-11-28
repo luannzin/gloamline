@@ -2,7 +2,7 @@
 // the vertex shader lifts from the height texture. Every grid vertex lands on a whole metre, so it
 // reads one texel exactly. Skirts hide the cracks between levels. Shading reads the ground
 // textures: region weights, roads, the normal, and the shared detail noise.
-import { HALF, SIZE, WATER_Y } from "@zimovye/world";
+import { DRIFT, HALF, SIZE, WATER_Y } from "@zimovye/world";
 import {
   cameraPosition,
   Fn,
@@ -151,6 +151,9 @@ export function makeTerrain(
   distance: number,
 ) {
   const group = new THREE.Group();
+  // the drifts banked against the walls stand up out of the ground (vertex stage; world: wind.ts)
+  const lift = (x: Node1, z: Node1) =>
+    driftAt(tex, vec2(x, z), 0, 0).sub(1).max(0).mul(BANK).mul(mood.u.snow);
   // a march along the sun over the height texture, with a penumbra that widens with distance
   const far = Fn(() => {
     const L = mood.u.sunDir;
@@ -206,6 +209,7 @@ export function makeTerrain(
         // (and a few centimetres under it at once: two surfaces at one height fight for each pixel,
         // a band of pepper and stair-steps round the layer's edge)
         h
+          .add(lift(wx, wz))
           .sub(positionLocal.y.mul(step * 3 + 2))
           .sub(smoothstep(1.5, 4.5, inside).mul(0.9))
           .sub(smoothstep(-0.8, 0.0, inside).mul(0.05)),
@@ -239,7 +243,7 @@ export function makeTerrain(
     // clods: the rim's top broken up at a hand's scale
     const clod = texture(detail, vec2(wx, wz).div(0.7)).level(float(0)).x.sub(0.5).mul(rim).mul(0.9);
     const down = press.sub(rim.mul(0.55)).sub(clod).mul(trails.deepest).mul(edge);
-    return vec3(wx, h.sub(down), wz);
+    return vec3(wx, h.add(lift(wx, wz)).sub(down), wz);
   })();
   const layer = new THREE.Mesh(sheet(seg, trails.span), material(layerPos, true));
   layer.frustumCulled = false;
@@ -303,6 +307,16 @@ export function makeTerrain(
     });
   }
   return { group, update };
+}
+
+/** How high a drift stands at its deepest (twice the snow's own depth), metres. */
+const BANK = 0.7;
+
+/** The drift (world: wind.ts) at `xz` plus (dx, dz) texels: 1 the snow's own depth, 0 bare. No mips. */
+function driftAt(tex: GroundTex, xz: Node2, dx: number, dz: number) {
+  return texture(tex.drift, xz.add(vec2(HALF + 0.5 + dx, HALF + 0.5 + dz)).div(SIZE))
+    .level(float(0))
+    .r.mul(255 / DRIFT);
 }
 
 /** Albedo, normal (view space) and roughness of the ground at positionWorld. */
@@ -478,7 +492,17 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
     vec3(0.085, 0.074, 0.058),
     rut.mul(0.85),
   );
-  const cover = snow.mul(float(1).sub(channel.mul(0.5))).toVar();
+  // the drifts: none under the eaves, scoured thin in the lee of every wall, banked on its windward
+  // side (the bank's own slope, read here, shades it as the mesh lifts it)
+  const dr = driftAt(tex, wp.xz, 0, 0);
+  const cover = snow
+    .mul(float(1).sub(channel.mul(0.5)))
+    .mul(smoothstep(0.12, 0.55, dr))
+    .toVar();
+  const bank = (dx: number, dz: number) => driftAt(tex, wp.xz, dx, dz).sub(1).max(0);
+  const bankN = vec2(bank(1, 0).sub(bank(-1, 0)), bank(0, 1).sub(bank(0, -1))).mul(
+    mood.u.snow.mul(BANK * 0.5),
+  );
   // trails (trails.ts), on the snow layer: the trench and its prints, the floor packed and in shade,
   // the rim heaped beside it. The surface itself is displaced (makeTerrain); here its slope is read
   // finer than the mesh can hold, so a print's edge is crisp. Only where the snow lies.
@@ -560,7 +584,7 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
   const dD = vec2(dS.x.mul(0.825).add(dS.y.mul(0.565)), dS.y.mul(0.825).sub(dS.x.mul(0.565)));
   // under snow the grain and the stones are buried: the drifts' long swells remain, and the wind's
   // ripples, ridges a hand apart lying across it, broken and bent by the drift
-  const wd = vec2(0.8, 0.6);
+  const wd = vec2(tex.wind[0], tex.wind[1]);
   const ripple = wp.xz
     .dot(wd)
     .mul(5.5)
@@ -579,6 +603,7 @@ export function groundShade(tex: GroundTex, detail: THREE.Texture, mood: MoodSta
       .add(side.mul(float(1).sub(cover)))
       .add(vec3(dB.x.negate(), 0, dB.y.negate()).mul(cover.mul(2.5)))
       .add(vec3(wd.x, 0, wd.y).mul(ripple).mul(cover).mul(float(1).sub(trail)))
+      .add(vec3(bankN.x.negate(), 0, bankN.y.negate()))
       .add(trailN),
   );
   const rough = mix(

@@ -88,12 +88,11 @@ What the bar is, in docs/CHARACTERS.md and DESIGN.md's Snow:
 Two frames sent with the brief (not on disk): RDR2's rider leading a horse along a snowed ridge, and
 God of War's pair walking a snowed ridge toward a crag.
 
-The AAA pass's board (docs/PLAN.md), sent in chat; each belongs at the path given (save them there
-by hand: they came without files):
+The AAA pass's board (docs/PLAN.md), sent in chat and copied by hand (not fetched by `refs.sh`):
 
 | File | What it teaches |
 |---|---|
-| `refs/snow-world/rdr2-rider-blizzard.webp` | A rider in a blizzard: the horse's legs gone into the snow, the coat caked on the shoulders, the far ridge a pale silhouette, dry shrubs standing out of the drift |
+| `refs/snow-world/rdr2-rider-blizzard.png` | A rider in a blizzard: the horse's legs gone into the snow, the coat caked on the shoulders, the far ridge a pale silhouette, dry shrubs standing out of the drift |
 | `refs/snow-world/rdr2-trench-fog.webp` | A trench of footprints: soft rounded walls, blue shade inside, sparkle on the lit snow, spruces greying into the fog |
 | `refs/trees/rdr2-spruce-valley-fog.webp` | Spruces under heavy snow: clumps on drooping boughs with dark gaps between, fog in layers, snow-capped stones in a dark creek |
 | `refs/trees/spruce-snow-photo.webp` | A real spruce after fresh snow: a white line on top of each drooping branchlet, dark needles under it, open gaps between the boughs |
@@ -101,6 +100,12 @@ by hand: they came without files):
 | `refs/buildings/rdr2-colter.webp` | A snowed-in village: thick, rounded loads on the roofs, icicles along rails, snow on every horizontal, a trodden muddy road |
 | `refs/buildings/rdr2-cabin-icicles.webp` | A log cabin close: the roof's snow curling over the eave, a fringe of icicles, frost in the logs' cracks, dry grass with snow on it |
 | `refs/column/eruption-night.webp` | A real eruption at night: billows lit red from beneath, dark ash above, lightning inside the cloud, glowing debris on the slope |
+
+Still wanted: RDR2 snow stopping at a porch roof, a lantern in snowfall at night, a drift against a
+wall, GoW Ragnarök's flakes (`refs/snow-world/`); a winter oak holding brown leaves (`refs/trees/`);
+a real izba with carved window frames (`refs/buildings/`); a snow plume off a crest, a layered cliff
+(`refs/mountains/`); Arthur's coat seams, a telogreika's quilting, an ushanka and mittens
+(`refs/survivor-close/`); RDR2 snow with dry grass tufts (`refs/ground/`).
 
 - **Snow is smooth and clean.** A pristine white surface with long soft swells; detail is a fine
   grain, never pebbles or spots. Its shadows are crisp and blue-grey, the brightest thing in frame is
