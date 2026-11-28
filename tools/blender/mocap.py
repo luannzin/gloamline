@@ -238,6 +238,22 @@ def aim(tgt, world, bone, direction, amount=1.0):
     world[bone] = q.to_matrix() @ W
 
 
+def steady(tgt, world, bones, anchor, keep):
+    """Holds `bones` (a chain above `anchor`) in their rest pose relative to the anchor, letting `keep`
+    of the capture's own movement through: a head that looks where the body faces."""
+    bs = tgt.data.bones
+    A = world.get(anchor)
+    if A is None:
+        return
+    ra = bs[anchor].matrix_local.to_3x3().normalized()
+    for b in bones:
+        if b not in world:
+            continue
+        rb = bs[b].matrix_local.to_3x3().normalized()
+        follow = (A @ ra.inverted() @ rb).to_quaternion()
+        world[b] = follow.slerp(world[b].to_quaternion(), keep).to_matrix()
+
+
 def turn(world, bones, axis, deg):
     """Turns `bones` about a world axis (each keeps its own place in the chain)."""
     R = Matrix.Rotation(math.radians(deg), 3, axis)

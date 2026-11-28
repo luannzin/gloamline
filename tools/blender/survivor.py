@@ -1101,8 +1101,21 @@ SPEEDS = {}
 SPEEDS["walk"] = mocap.bake_clip(rig, os.path.join(CMU, "16_15.bvh"), "walk", cycle=(0.9, 1.4), edit=lantern_arm(0.85))
 SPEEDS["run"] = mocap.bake_clip(rig, os.path.join(CMU, "16_45.bvh"), "run", cycle=(0.4, 0.8), edit=lantern_arm(0.75))
 SPEEDS["trudge"] = mocap.bake_clip(rig, os.path.join(CMU, "08_04.bvh"), "trudge", cycle=(1.2, 2.0), edit=trudge_edit())
-SPEEDS["idle"] = mocap.bake_clip(rig, os.path.join(CMU, "77_02.bvh"), "idle", cycle=(4, 8), still=True, seconds=6, start=0.2, edit=lantern_arm(0.9))
-SPEEDS["cold"] = mocap.bake_clip(rig, os.path.join(CMU, "79_68.bvh"), "cold", cycle=(4, 8), still=True, seconds=6, start=0.4, edit=lantern_arm(0.5))
+def standing(arm_amount, keep):
+    """A still clip: the lantern arm, and the head kept looking where the body faces, `keep` of the
+    capture's own turning let through (its actor looked about the room; the game turns the head
+    toward where you look)."""
+    arm = lantern_arm(arm_amount)
+
+    def edit(world, hips, t):
+        mocap.steady(rig, world, ["Neck", "Neck1", "Head"], "Spine1", keep)
+        arm(world, hips, t)
+
+    return edit
+
+
+SPEEDS["idle"] = mocap.bake_clip(rig, os.path.join(CMU, "77_02.bvh"), "idle", cycle=(4, 8), still=True, seconds=6, start=0.2, edit=standing(0.9, 0.25))
+SPEEDS["cold"] = mocap.bake_clip(rig, os.path.join(CMU, "79_68.bvh"), "cold", cycle=(4, 8), still=True, seconds=6, start=0.4, edit=standing(0.5, 0.6))
 scene.render.fps = 30
 
 for o in bpy.context.selected_objects:
