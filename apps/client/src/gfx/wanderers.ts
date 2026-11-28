@@ -247,12 +247,17 @@ function material(look: Look, u: ReturnType<typeof uniforms>, detail: THREE.Text
   // legs after deep snow; frost greying the fur and the wool
   const up = normalWorldGeometry.y;
   const patch = tri(4.5, "x").add(weave.mul(0.15));
+  // (on top above the knees: the feet kick it off, and a white toe reads as a bare foot)
   const onTop = smoothstep(0.15, 0.7, up.add(patch.sub(0.5).mul(0.7)))
     .mul(smoothstep(float(1).sub(u.snow), float(1.25).sub(u.snow), patch.add(up.mul(0.3))))
+    .mul(smoothstep(0.45, 0.65, P.y))
     .toVar();
-  const legs = smoothstep(u.caked.mul(0.5).add(0.1), u.caked.mul(0.5).add(0.02), P.y)
-    .mul(smoothstep(0.35, 0.55, patch.add(grain.mul(0.3))))
-    .mul(u.caked.min(1));
+  // caked on the legs to the depth they went in: an even crust with a ragged top edge, thinner
+  // on the leather that sheds it
+  const crust = u.caked.mul(0.45).add(0.08).add(patch.sub(0.5).mul(0.12));
+  const legs = smoothstep(crust, crust.sub(0.06), P.y)
+    .mul(smoothstep(0.2, 0.5, patch.add(grain.mul(0.2)).add(0.15)))
+    .mul(u.caked.min(1).mul(float(1).sub(is("leather").mul(0.5))));
   const exposed = float(1).sub(is("glass")).sub(is("lens")).sub(is("eye")).sub(is("skin"));
   const snowK = onTop.max(legs).mul(exposed).mul(mood.u.open.mul(0.7).add(0.3)).toVar();
   const fuzzy = is("fur").add(is("wool")).add(is("scarf"));
