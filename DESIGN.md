@@ -31,21 +31,36 @@ The references and what each teaches are in `docs/REFERENCES.md` (images in `ref
 
 ## The mark
 
-A log hut's gable with smoke standing from the ridge: someone is wintering there, and the smoke is
-the Column. Soot or frost for the hut, ember for the smoke, always; next to it ZIMOVYE in Oswald 600,
-and under it «Зимовье · зима после вспышки» tracked wide.
+The zimovye in a ring: a log hut under a heavy cap of snow, its window, three logs with the middle
+one set in so the corners cross, and nothing else. One colour, frost (or soot on light), no accent:
+the warm colours belong to the world. The name is Oswald 400 tracked wide (0.34em): in the menu,
+ZIMOVYE beside the mark with «Зимовье · зима после вспышки» under it; in the title, ZIMO and VYE
+either side of it. The tab's icon is the mark in frost on a soot tile. The paths live in
+`apps/client/src/ui/mark.tsx`, shared by all three.
 
 ## The world is the menu
 
-- The game runs behind every screen. The splash (faceta's, in this winter) is a field of snow with
-  the mark and the name cut in, snow blowing across on the wind, what's being built and how far in
-  the corner, a tip opposite, the real progress as a line along the bottom. When the world is ready
-  the field is cut away along a slant, showing it.
-- The menu is a shot of you standing in the world, kept sharp: from behind and to the left of your
-  survivor, the lantern lit, looking out at what they face, so they stand in the right third. The
-  camera breathes and leans toward the pointer; the first time, it arrives from high and further
-  back. The words sit bottom-left in the HUD's type over the world, no panel, with only the cold
-  pooling under them: Enter the zone, Invite friends, Settings.
+- The game runs behind every screen. It opens the way Crimson Desert's does (refs/crimson-desert/),
+  in its own colours: a studio card, BY LUAN in white Oswald tracked wide on black, out of the dark
+  and back into it, under a film grain that stays for the whole intro; then the title, ZIMO, the
+  mark, VYE, in frost in the winter air. Three slanted planes of air arrive on the wind from the
+  right, each paler than the one before (the air in layers, as below: the further off, the paler),
+  paler at the top as fog lit from the sky, their cut edges catching the light; they drift at their
+  own paces, so the lines between them keep shifting, and snow blows past at three depths along the
+  same slant. The mark draws itself (the ring round from north, the roof and the logs settling into
+  it, the window lit like a lamp catching) and the name comes out of it letter by letter, the
+  nearest first. Along the bottom, over a dark foot: what's being built ("Raising the land…") and
+  the real progress, a tip about surviving the district that changes every few seconds, and the
+  progress as a hairline whose head is a small breathing light. When the world is ready the window
+  lights warm (the one warm thing, as in the world) and "The zone is ready"; once the mark has
+  finished, the planes are carried off on the wind to the left, the nearest last, its edge the cut
+  that sweeps onto the world. Any key or click skips the studio card, and the title once the world
+  is ready. Reduced motion keeps only the fades.
+- The menu is a shot of you standing in the world, with no panel over it: from behind and to the
+  left of your survivor, the lantern lit, looking out at what they face, so they stand in the right
+  third. The camera breathes and leans toward the pointer; the first time, it arrives from high and
+  further back as the title fades. The words sit bottom-left in the HUD's type over the world, with
+  only the cold pooling under them: Enter the zone, Invite friends, Settings.
 - Starting is one camera move, never a cut (God of War's): the chosen line flicks, the words go, and
   the camera swings in to your shoulder as the lens widens (2.4 s). The controls are yours when it
   lands. `Esc` plays it backwards.
@@ -76,6 +91,8 @@ What Elden Ring does, at a browser's budget:
   sky does most of the lighting, the grade carries the mood.
 - **Nothing is still.** Snow falls and drifts on the wind, reeds bend in gusts, the camera breathes.
 - **Static light is computed once.** The shadow map redraws only when its box moves or the sun turns.
+- **The lens stays on the survivor.** With depth of field on, the world past the body softens a
+  little, the far ridges most and never fully, as through a long lens (Crimson Desert's).
 
 | Place | Russian | Light | Air | What moves |
 |---|---|---|---|---|
@@ -138,4 +155,7 @@ tracks back in over a few minutes.
 The snow in the air rides one wind (`gfx/wind.ts`): flakes streak along it, a few big ones pass
 the lens, and in the gusts it lifts off the ground and blows along it knee-high. In a blizzard the
 near air itself goes white in sheets the wind carries past. Breath steams in front of every face.
-Over the shoulder the camera rides steady: the body does the moving.
+Over the shoulder the camera rides steady: the body does the moving. It sits close, after Crimson
+Desert's framing: 3.5 m behind, a little above the head and to the right, on a longer lens (62°
+against 70° through the eyes), so the survivor stands just left of centre and low, the whole body in
+frame with the feet just above the bottom edge, and the world they face above them.

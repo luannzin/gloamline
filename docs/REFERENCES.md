@@ -62,6 +62,9 @@ not fetched by `refs.sh`):
 | File | What it shows |
 |---|---|
 | `refs/crimson-desert/blizzard-white-horn.webp` | A rider in a white-out, the White Horn's silhouette ahead, snow streaking |
+| `refs/crimson-desert/studio-card.webp` | The studio card: one tracked white word on black (the model for BY LUAN) |
+| `refs/crimson-desert/title-card.webp` | The title: tracked gold letters either side of an emblem, polished metal, light moving over it |
+| `refs/crimson-desert/white-mountains-cliff-1.webp`, `-2.webp` | The play camera: close behind, the body low and just left of centre, cut off at the hips; a cliff wall with snow on every ledge, a scree field with a cap of snow on each stone, the distance soft in haze |
 | `refs/creature/white-horn-standing.webp` | The White Horn standing: pale fur, antlers, the mass of it |
 | `refs/creature/white-horn-face.png` | Its face: antlers through the skull, raw red flesh against white fur |
 | `refs/survivor/metro-exodus-frozen-ruins.webp` | A figure from behind in snow-crusted kit against a white void |
@@ -84,6 +87,20 @@ What the bar is, in docs/CHARACTERS.md and DESIGN.md's Snow:
 
 Two frames sent with the brief (not on disk): RDR2's rider leading a horse along a snowed ridge, and
 God of War's pair walking a snowed ridge toward a crag.
+
+The AAA pass's board (docs/PLAN.md), sent in chat; each belongs at the path given (save them there
+by hand: they came without files):
+
+| File | What it teaches |
+|---|---|
+| `refs/snow-world/rdr2-rider-blizzard.webp` | A rider in a blizzard: the horse's legs gone into the snow, the coat caked on the shoulders, the far ridge a pale silhouette, dry shrubs standing out of the drift |
+| `refs/snow-world/rdr2-trench-fog.webp` | A trench of footprints: soft rounded walls, blue shade inside, sparkle on the lit snow, spruces greying into the fog |
+| `refs/trees/rdr2-spruce-valley-fog.webp` | Spruces under heavy snow: clumps on drooping boughs with dark gaps between, fog in layers, snow-capped stones in a dark creek |
+| `refs/trees/spruce-snow-photo.webp` | A real spruce after fresh snow: a white line on top of each drooping branchlet, dark needles under it, open gaps between the boughs |
+| `refs/mountains/rdr2-grizzlies.webp` | Ridges with rock in strata, snow on every ledge and gentle slope, bare rock on the steep faces, sparse spruces |
+| `refs/buildings/rdr2-colter.webp` | A snowed-in village: thick, rounded loads on the roofs, icicles along rails, snow on every horizontal, a trodden muddy road |
+| `refs/buildings/rdr2-cabin-icicles.webp` | A log cabin close: the roof's snow curling over the eave, a fringe of icicles, frost in the logs' cracks, dry grass with snow on it |
+| `refs/column/eruption-night.webp` | A real eruption at night: billows lit red from beneath, dark ash above, lightning inside the cloud, glowing debris on the slope |
 
 - **Snow is smooth and clean.** A pristine white surface with long soft swells; detail is a fine
   grain, never pebbles or spots. Its shadows are crisp and blue-grey, the brightest thing in frame is

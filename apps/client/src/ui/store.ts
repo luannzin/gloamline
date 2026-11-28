@@ -99,6 +99,8 @@ export const ui = {
     video: (_v: Video) => {},
     /** times the presets here and keeps the best this machine holds */
     detect: () => {},
+    /** the intro is fading: the camera arrives into the menu's shot (stage.ts) */
+    arrive: () => {},
   },
 };
 

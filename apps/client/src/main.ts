@@ -1,4 +1,4 @@
-// Boot, menu and the frame loop. The world builds on every core while the splash says what it's
+// Boot, menu and the frame loop. The world builds on every core while the intro says what it's
 // doing, then runs behind the menu, framed on you standing in it, so shaders compile and resolution
 // settles before anyone walks in (DESIGN.md: the world is the menu).
 import "./style.css";
@@ -262,9 +262,10 @@ async function boot() {
   player.teleport(v[0], v[1], v[2], v[3], v[4]);
   // (dev: a camera held at an offset from the body, for looking at it: __game.look)
   const look = { on: false, ang: 0, dist: 2.5, h: 1.4, at: 1.1 };
+  const chest = new THREE.Vector3();
   const tick = (dt: number, active: boolean) => {
     player.update(dt, active);
-    stage.update(dt, player.pos.x, player.pos.y, player.pos.z, player.yaw);
+    stage.update(dt, player.pos.x, player.pos.y, player.pos.z, player.yaw, player.behind);
     if (look.on) {
       const a = player.yaw + look.ang,
         p = player.pos;
@@ -275,6 +276,9 @@ async function boot() {
     wind.update(dt, mood.u.snowfall.value);
     d.sky();
     d.update();
+    // the lens holds the body sharp (its chest; in first person, the eyes: the world past them softens)
+    chest.set(player.pos.x, player.pos.y - player.sunk + 1.3, player.pos.z);
+    post.focus = camera.position.distanceTo(chest);
     post.frame();
     lantern.position.set(
       camera.position.x + Math.sin(-player.yaw) * 0.4,
@@ -492,8 +496,9 @@ async function boot() {
     // the scale's ceiling depends on the window's size (post.ts)
     post.setScale(want.scale, want.dynamic);
   });
+  // the camera arrives into the menu's shot as the intro fades (ui/intro.tsx)
+  ui.actions.arrive = () => stage.arrive();
   ui.set({ phase: "menu", progress: 1 });
-  stage.arrive();
 
   // --- area names, the way they appear when you cross into one ---
   const w = new Float32Array(NREG);

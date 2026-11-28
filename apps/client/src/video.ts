@@ -18,6 +18,8 @@ export type Details = {
   shafts: number;
   /** contact shadows: 0 off, 1 on, 2 finer */
   contact: number;
+  /** depth of field: 0 off, 1 the world past the body a little soft */
+  dof: number;
   /** the water's mirror: 0 off, at a third or at half the screen's resolution */
   reflections: number;
   /** the sky as image-based light: 0 a flat hemisphere, 1 on */
@@ -108,6 +110,13 @@ export const DETAILS: {
     presets: [0, 0, 0, 0],
   },
   {
+    key: "dof",
+    label: "Depth of field",
+    levels: ["Off", "On"],
+    hint: "Past your survivor the world goes a little soft, as through a lens.",
+    presets: [0, 1, 1, 1],
+  },
+  {
     key: "reflections",
     label: "Reflections",
     levels: ["Off", "Low", "High"],
@@ -139,7 +148,7 @@ export const DETAILS: {
 
 const KEYS = DETAILS.map((d) => d.key);
 /** The details the lens reads (gfx/post.ts): a change rebuilds only the lens, at once. */
-export const LENS: (keyof Details)[] = ["aa", "ao", "shafts", "contact"];
+export const LENS: (keyof Details)[] = ["aa", "ao", "shafts", "contact", "dof"];
 /** The rest: a change rebuilds what's drawn in the world, compiled beside what's showing (main.ts). */
 export const DRESS = KEYS.filter((k) => !LENS.includes(k));
 
@@ -166,6 +175,11 @@ export function loadVideo(first: number): Video {
     if (saved && typeof saved === "object" && current === null) delete saved.contact;
     if (saved && typeof saved === "object") {
       const v = { ...base, ...saved } as Video;
+      // (saves from before depth of field keep the preset they matched: on, unless that was Low)
+      if (!("dof" in saved)) {
+        v.dof = 1;
+        if (presetOf(v) < 0) v.dof = 0;
+      }
       // anything out of range (an older save, a hand edit) falls back to the preset's
       for (const d of DETAILS)
         if (!Number.isInteger(v[d.key]) || v[d.key] < 0 || v[d.key] >= d.levels.length)

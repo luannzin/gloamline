@@ -1,17 +1,10 @@
-// Splash, menu and HUD over the running world (DESIGN.md). The splash is a field of snow with the
-// wordmark cut into it, cut away along a slant when the world is built; the menu is a few words in
-// the bottom-left over the live shot of you standing in the world; the HUD says nothing until it
+// Intro, menu and HUD over the running world (DESIGN.md). The intro (intro.tsx) is a studio card and
+// the title over slanted facets, cut away onto the world when it's built; the menu is a few words in the
+// bottom-left over the live shot of you standing in the world; the HUD says nothing until it
 // matters, then says it at a glance from a corner: status top-left, the party top-right, the
 // minimap and the feed bottom-left, the place you've entered in the middle for a moment.
 import { Flame, Footprints, Heart, Radiation, Snowflake } from "lucide-react";
-import {
-  type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type ReactNode,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -27,170 +20,54 @@ import {
   type Video,
   withPreset,
 } from "../video";
+import { Intro } from "./intro";
+import { Emblem } from "./mark";
 import { type Person, ui, useUI, type Vitals } from "./store";
 
 const shadow = "[text-shadow:0_1px_8px_rgb(0_0_0/0.85)]";
 
 export function App() {
   const s = useUI();
-  // the splash stays over everything until its cut has played
-  const [splash, setSplash] = useState(true);
+  // the intro stays over everything until it has faded; the menu comes in as it goes
+  const [intro, setIntro] = useState<"on" | "leaving" | "off">("on");
   return (
     <>
-      {(s.phase === "menu" || s.phase === "entering") && <Menu leaving={s.phase === "entering"} />}
+      {(s.phase === "menu" || s.phase === "entering") && intro !== "on" && (
+        <Menu leaving={s.phase === "entering"} />
+      )}
       {s.phase === "playing" && <Hud />}
       {s.phase === "playing" && s.mapOpen && <WorldMap />}
-      {splash && (
-        <Splash
+      {intro !== "off" && (
+        <Intro
           stage={s.stage}
           progress={s.progress}
           error={s.error}
           done={s.phase !== "loading"}
-          onGone={() => setSplash(false)}
+          onLeave={() => {
+            setIntro("leaving");
+            ui.actions.arrive();
+          }}
+          onGone={() => setIntro("off")}
         />
       )}
     </>
   );
 }
 
-/** The mark: a log hut's gable with smoke standing from the ridge (the zimovye, and the Column). */
-function Mark({ className }: { className?: string }) {
+/** The mark and the name tracked wide, as the title sets it, sized by the font size it's given. */
+function Wordmark({ className = "", sub = "" }: { className?: string; sub?: string }) {
   return (
-    <svg viewBox="0 0 64 64" aria-hidden="true" className={className}>
-      <path className="mark-smoke" d="M29 21 L35 21 L39 0 L25 0 Z" fill="var(--color-ember)" />
-      <path
-        className="mark-roof"
-        d="M6 42 L32 21 L58 42"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="6"
-        strokeLinejoin="miter"
-        pathLength={1}
-      />
-      <path
-        className="mark-logs"
-        d="M14 50.5 H50 M19 59 H45"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="5"
-        pathLength={1}
-      />
-    </svg>
-  );
-}
-
-/** The mark and the name, sized by the font size it's given; `intro` plays the cut-in. */
-function Wordmark({
-  className = "",
-  sub = "",
-  intro = false,
-}: {
-  className?: string;
-  sub?: string;
-  intro?: boolean;
-}) {
-  return (
-    <hgroup className={`m-0 flex items-center gap-[0.28em] ${intro ? "wordmark-intro" : ""} ${className}`}>
-      <Mark className="size-[1.15em] shrink-0" />
-      <div className="flex flex-col gap-[0.14em]">
-        <h1 className="wordmark-word m-0 font-display font-semibold text-[1em] uppercase leading-[0.86] tracking-[0.06em]">
+    <hgroup className={`m-0 flex items-center gap-[0.36em] ${className}`}>
+      <Emblem className="size-[1.7em] shrink-0 drop-shadow-[0_1px_6px_rgb(0_0_0/0.6)]" />
+      <div className="flex flex-col gap-[0.3em]">
+        <h1 className="m-0 mr-[-0.34em] font-display font-normal text-[1em] uppercase leading-[0.86] tracking-[0.34em]">
           Zimovye
         </h1>
-        <p
-          className={`wordmark-sub m-0 font-display text-[max(12px,0.2em)] uppercase tracking-[0.32em] ${sub}`}
-          lang="ru"
-        >
+        <p className={`m-0 font-display text-[max(12px,0.26em)] uppercase tracking-[0.3em] ${sub}`} lang="ru">
           Зимовье · зима после вспышки
         </p>
       </div>
     </hgroup>
-  );
-}
-
-const TIPS = [
-  "The lantern warms you, slowly. F lights it and puts it out.",
-  "Deep snow slows you to a trudge. Roads and trodden trails are firm.",
-  "The Column is the way home: the ember mark on the minimap, with the distance to it.",
-  "Running in the cold spends your breath fast. Walk when you can.",
-  "Falling snow fills old tracks back in over a few minutes.",
-  "Tab opens the map. V moves the camera between your shoulder and your eyes.",
-];
-
-/**
- * The splash (faceta's, in this winter): a field of snow, the wordmark cut into it, snow blowing
- * across, the real progress as a line along the bottom. When the world is built the field is cut
- * away along a slant, showing it.
- */
-function Splash({
-  stage,
-  progress,
-  error,
-  done,
-  onGone,
-}: {
-  stage: string;
-  progress: number;
-  error: string | null;
-  done: boolean;
-  onGone: () => void;
-}) {
-  const [tip] = useState(() => TIPS[Math.floor(Math.random() * TIPS.length)]);
-  const pct = Math.round(progress * 100);
-  return (
-    <section
-      aria-label="Zimovye"
-      className={`splash fixed inset-0 grid place-items-center overflow-hidden text-soot ${done ? "is-leaving" : ""}`}
-      onAnimationEnd={(e) => {
-        if (e.target === e.currentTarget && done) onGone();
-      }}
-    >
-      <div className="splash-snow absolute inset-0" aria-hidden="true">
-        {Array.from({ length: 9 }, (_, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: a fixed set of streaks
-          <i key={i} style={{ "--i": i } as CSSProperties} />
-        ))}
-      </div>
-      <Wordmark intro className="relative text-[clamp(52px,9vw,128px)]" sub="opacity-70" />
-      <footer className="absolute inset-x-8 bottom-8 flex items-end justify-between gap-10 sm:inset-x-12">
-        {error ? (
-          <p className="m-0 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm" role="alert">
-            {error}
-            <button
-              type="button"
-              className="cursor-pointer font-display font-semibold uppercase tracking-[0.14em] underline underline-offset-4"
-              onClick={() => location.reload()}
-            >
-              Reload page
-            </button>
-          </p>
-        ) : (
-          <>
-            <p className="m-0 font-display font-semibold text-sm uppercase tabular-nums tracking-[0.14em]">
-              {stage} · {pct}%
-            </p>
-            <p className="m-0 hidden max-w-[46ch] text-balance text-right text-sm opacity-75 sm:block">
-              {tip}
-            </p>
-          </>
-        )}
-      </footer>
-      {!error && (
-        <div
-          className="absolute inset-x-0 bottom-0 h-1 bg-soot/15"
-          role="progressbar"
-          aria-label="Building the world"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={pct}
-          aria-valuetext={`${stage} ${pct}%`}
-        >
-          <i
-            className="block h-full origin-left bg-soot transition-transform duration-300 ease-out"
-            style={{ transform: `scaleX(${progress})` }}
-          />
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -217,7 +94,7 @@ function Menu({ leaving }: { leaving: boolean }) {
   const [sel, setSel] = useState(0);
   const [note, setNote] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
-  // the first time, the words wait for the splash's cut and the camera's arrival
+  // the first time, the words wait for the intro's fade and the camera's arrival
   const [first] = useState(() => !ui.get().started);
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const invite = async () => {
@@ -277,7 +154,7 @@ function Menu({ leaving }: { leaving: boolean }) {
         className={`menu absolute flex flex-col gap-[clamp(24px,5vh,44px)] ${first ? "menu-first" : ""}`}
         style={{ left: edge, bottom: foot }}
       >
-        <Wordmark className={`text-[clamp(44px,5.2vw,76px)] text-frost ${shadow}`} sub="text-amber" />
+        <Wordmark className={`text-[clamp(30px,3.4vw,50px)] text-frost ${shadow}`} sub="text-frost-soft" />
         <nav aria-label="Menu" className="flex flex-col items-start">
           {items.map((it, i) => (
             <button

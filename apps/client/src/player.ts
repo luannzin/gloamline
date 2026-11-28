@@ -6,6 +6,13 @@ import * as THREE from "three/webgpu";
 
 const R = 0.38,
   EYE = 1.62,
+  // over the shoulder, after Crimson Desert's framing (refs/crimson-desert/white-mountains-cliff-*.webp)
+  // but with the whole body in frame: close behind, a little above the head and to the right, so
+  // the body stands just left of centre and low, the feet just above the bottom edge when looking
+  // level, with the world it faces above it
+  BACK = 3.5,
+  SIDE = 0.5,
+  RISE = 0.26,
   STEP = 0.5,
   CELL = 8,
   NC = (HALF * 2) / CELL;
@@ -230,7 +237,7 @@ export function makePlayer(
   let deep = 0,
     sunk = 0,
     moving = 0,
-    camReach = 3.4;
+    camReach = BACK;
 
   /** Whether a point (the camera) is inside a trunk, a stone or a wall, with a margin. */
   function inside(p: THREE.Vector3) {
@@ -334,24 +341,26 @@ export function makePlayer(
       look.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
       // pulled in where the ground, a trunk, a stone or a wall would come between (fast in, slowly
       // back out, so passing a tree doesn't snap the view)
-      let reach = 3.4;
+      let reach = BACK;
       for (let s = 1; s <= 12; s++) {
-        const d = (3.4 * s) / 12;
+        const d = (BACK * s) / 12;
         eye
           .copy(head)
           .addScaledVector(look, -d)
-          .addScaledVector(right, 0.55 * (s / 12));
+          .addScaledVector(right, SIDE * (s / 12));
+        eye.y += RISE * (s / 12);
         if (eye.y < heightAt(world.ground.height, eye.x, eye.z) + 0.35 || inside(eye)) {
           reach = Math.max(0.5, d - 0.45);
           break;
         }
       }
       camReach += (reach - camReach) * Math.min(1, dt * (reach < camReach ? 18 : 2.5));
+      const near = Math.min(1, camReach / BACK);
       eye
         .copy(head)
         .addScaledVector(look, -camReach)
-        .addScaledVector(right, 0.55 * Math.min(1, camReach / 3.4));
-      eye.y += 0.15;
+        .addScaledVector(right, SIDE * near);
+      eye.y += RISE * near;
       camera.position.lerpVectors(head, eye, e);
     } else camera.position.copy(head);
     camera.rotation.set(

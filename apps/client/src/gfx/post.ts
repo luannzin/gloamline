@@ -1,7 +1,8 @@
 // The lens, after abyssal-garden's composite: the scene, sun shafts marched through the shadow map
 // and blurred, a soft bloom mixed in (a haze around light, not a glow on everything), exposure, a
 // gentle vignette, a filmic curve, an S-curve on luminance, highlights that lose a little colour, and
-// a triangular dither that kills banding in the fog.
+// a triangular dither that kills banding in the fog. With depth of field on, the world past the body
+// softens a little, the far ridges most (Crimson Desert's lens: the eye stays on the survivor).
 //
 // With upscaling on (video.ts) the scene renders below the output resolution with a jittered camera,
 // and a temporal upscaler (TAAU: Karis 2014, FSR 2's resolve) rebuilds a full-resolution image from
@@ -10,6 +11,7 @@
 
 import { bilateralBlur } from "three/addons/tsl/display/BilateralBlurNode.js";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
+import { gaussianBlur } from "three/addons/tsl/display/GaussianBlurNode.js";
 import { godrays } from "three/addons/tsl/display/GodraysNode.js";
 import { ao } from "three/addons/tsl/display/GTAONode.js";
 import { sharpen } from "three/addons/tsl/display/SharpenNode.js";
@@ -106,6 +108,18 @@ export function makePost(
     camFar = uniform(camera.far);
   /** how cold the body is, 0 warm .. 1 freezing (main.ts, from the warmth) */
   const frost = uniform(0);
+  /** metres from the lens to the body: what's held sharp (main.ts) */
+  const focus = uniform(3);
+
+  // the soft image depth of field mixes toward: the settled one blurred at half resolution
+  // (ponytail: one blur crossfaded by depth, so a sharp edge in front bleeds a faint halo into the
+  // soft distance behind it; a gather by circle of confusion if that ever shows)
+  let soft: THREE.TextureNode | null = null;
+  if (v.dof > 0) {
+    const b = gaussianBlur(col, 1, 2.5, { resolutionScale: 0.5 });
+    owned.push(b);
+    soft = b.getTextureNode();
+  }
 
   let aoTex: THREE.TextureNode | null = null;
   if (v.ao > 0) {
@@ -151,15 +165,20 @@ export function makePost(
 
   const graded = Fn(() => {
     const c = col.rgb.toVar();
+    // metres to what this pixel shows
+    const z = perspectiveDepthToViewZ(depth.sample(screenUV).r, camNear, camFar).negate();
+    if (soft) {
+      // sharp to some way past the body, then softening into the distance (never fully: the far
+      // ridges still read as ridges)
+      c.assign(mix(c, soft.sample(screenUV).rgb, smoothstep(focus.add(14), focus.add(120), z).mul(0.85)));
+    }
     if (aoTex) {
       // on what's near only: past a few tens of metres (and on the sky) the screen-space search
       // reaches across a whole silhouette and shades the air beside it in a hard-edged wedge
-      const z = perspectiveDepthToViewZ(depth.sample(screenUV).r, camNear, camFar).negate();
       c.mulAssign(mix(float(1), aoTex.sample(screenUV).r, smoothstep(80, 35, z).mul(0.8)));
     }
     if (contact) {
       // near only: far off, the march is noise at the scale of a pixel
-      const z = perspectiveDepthToViewZ(depth.sample(screenUV).r, camNear, camFar).negate();
       c.mulAssign(mix(float(1), contact.sample(screenUV).r, smoothstep(12, 5, z).mul(0.4)));
     }
     if (rays) {
@@ -304,6 +323,10 @@ export function makePost(
     /** How cold the body is, 0..1: the frost over the view. */
     set frost(k: number) {
       frost.value = k;
+    },
+    /** Metres from the lens to what it holds sharp: the body. */
+    set focus(m: number) {
+      focus.value = m;
     },
     dispose() {
       for (const o of owned) o.dispose();

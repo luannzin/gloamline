@@ -108,7 +108,7 @@ body.playing #veil {
 }
 
 /* the menu fades in; it also slides a little when motion is welcome. The first time, it waits for
-   the splash's cut and the camera's arrival (stage.ts). */
+   the intro's fade and the camera's arrival (stage.ts). */
 .menu {
   animation: fade 300ms ease-out both;
 }
@@ -169,108 +169,374 @@ body.playing #veil {
   }
 }
 
-/* The splash (faceta's, in this winter): a field of snow with one lighter facet across it, snow
-   blowing through on the wind, the wordmark cut in. Leaving, the field is cut away along a slant. */
-.splash {
-  background: #d9e0e6;
+/* The intro (ui/intro.tsx). The studio card comes out of the dark and goes back into it, under a
+   film grain that stays for the whole intro. Then the title's world arrives on the wind: three
+   slanted planes of winter air slide in from the right, each paler than the one before it (DESIGN.md:
+   the further off, the paler, so depth reads in flat planes), their cut edges catching the light, and
+   drift at their own paces so the lines between them keep shifting. Snow blows past at three depths
+   along the same slant. The mark draws itself and the name comes out of it; along the bottom, what's
+   being built, the real progress and a tip. When the world is ready the window lights warm, and the
+   planes are carried off on the wind, the palest first, onto the world. Only opacity, filter and
+   transforms move: the compositor keeps them smooth while the world is still compiling. */
+.intro {
+  background: #000;
 }
-.splash::before {
+.intro.is-leaving {
+  background: transparent;
+  animation: intro-out 1400ms linear forwards;
+}
+/* film grain, nudged a few times a second like a projector's */
+.intro::after {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.05;
+}
+.intro-facets,
+.intro-snow {
+  position: absolute;
+  inset: 0;
+}
+.intro-facets,
+.intro-snow,
+.intro-foot {
+  opacity: 0;
+  transition: opacity 1400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.intro.has-title .intro-facets,
+.intro.has-title .intro-snow,
+.intro.has-title .intro-foot {
+  opacity: 1;
+}
+/* shade along the top and the foot of the frame: depth, and dark ground for the words at the bottom */
+.intro-facets::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: var(--color-frost);
-  clip-path: polygon(0 0, 63% 0, 41% 100%, 0 100%);
+  background:
+    linear-gradient(to top, rgb(4 5 7 / 0.82), transparent 30%),
+    linear-gradient(to bottom, rgb(4 5 7 / 0.55), transparent 24%);
 }
-.splash-snow i {
+.intro-facet {
   position: absolute;
-  right: -24vw;
-  top: calc(14% + var(--i) * 8.6%);
-  width: calc(28px + var(--i) * 11px);
-  height: 2px;
+  inset: 0;
+}
+/* each plane's left edge is a slant through the middle of the screen; the box is three screens tall,
+   so its gradient (paler above, as fog is lit from the sky) spans the frame between 33% and 66% */
+.intro-facet i {
+  position: absolute;
+  top: -100%;
+  bottom: -100%;
+  width: 260vw;
+  transform-origin: 0 50%;
+  rotate: 14deg;
+  box-shadow: inset 1px 0 0 rgb(233 238 242 / 0.09);
+}
+.intro-facet:nth-child(1) i {
+  left: -50%;
   background: var(--color-soot);
-  opacity: 0.5;
-  rotate: -7deg;
-  animation: gust 1.9s cubic-bezier(0.55, 0, 0.75, 0.25) infinite;
-  animation-delay: calc(var(--i) * 210ms);
+  box-shadow: none;
 }
-@keyframes gust {
-  to {
-    translate: -150vw 18vh;
-  }
+.intro-facet:nth-child(2) i {
+  left: 22%;
+  rotate: 12deg;
+  background: linear-gradient(#1b2127 33%, #0e1215 66%);
 }
-.splash.is-leaving {
-  animation: fade-out 240ms ease-out forwards;
+.intro-facet:nth-child(3) i {
+  left: 49%;
+  background: linear-gradient(#262e36 33%, #12171b 66%);
+}
+.intro-facet:nth-child(4) i {
+  left: 73%;
+  rotate: 16deg;
+  background: linear-gradient(#35404a 33%, #171d22 66%);
+}
+.intro-snow i {
+  position: absolute;
+  top: -4vh;
+  left: var(--x);
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  background: var(--color-frost);
+  opacity: var(--o);
+  filter: blur(var(--b));
+  display: none;
+}
+/* the progress: a hairline whose head is a small light, breathing while the world builds; its glow
+   may spill above and below the line, never past its ends */
+.intro-bar {
+  clip-path: inset(-12px 0);
+}
+.intro-bar i {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgb(233 238 242 / 0.2), rgb(233 238 242 / 0.75));
+  transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.intro-bar i::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 3px;
+  height: 3px;
+  translate: 50% -50%;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0 6px 2px rgb(233 238 242 / 0.85),
+    0 0 24px 6px rgb(160 196 224 / 0.35);
+}
+.intro-swap {
+  animation: fade-in 400ms ease-out both;
+}
+/* the world is ready: the hut's window lights warm (the one warm thing, as in the world) */
+.intro-emblem .emblem-window {
+  transition:
+    fill 600ms ease-out,
+    filter 600ms ease-out;
+}
+.intro.is-ready .intro-emblem .emblem-window {
+  fill: var(--color-amber);
+  filter: drop-shadow(0 0 2px rgb(255 179 71 / 0.85));
+}
+.intro.is-leaving .intro-foot {
+  opacity: 0;
+  transition-duration: 400ms;
+}
+.intro-studio {
+  animation: studio-fade 3200ms ease-in-out both;
+}
+.intro-title {
+  animation: fade-in 1200ms ease-out both;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .splash.is-leaving {
-    animation: splash-cut 560ms cubic-bezier(0.77, 0, 0.175, 1) forwards;
+  .intro::after {
+    animation: grain 900ms steps(1, end) infinite;
   }
-  /* the mark is drawn, the smoke rises from the ridge, the name is cut in, the line under it settles */
-  .wordmark-intro .mark-roof,
-  .wordmark-intro .mark-logs {
+  .intro-studio {
+    animation: studio 3200ms both;
+  }
+  /* the planes arrive on the wind, the palest first */
+  .intro-facet:not(:first-child) {
+    transform: translateX(135vw);
+    transition: transform 1500ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .intro.has-title .intro-facet {
+    transform: none;
+  }
+  .intro.has-title .intro-facet:nth-child(3) {
+    transition-delay: 90ms;
+  }
+  .intro.has-title .intro-facet:nth-child(2) {
+    transition-delay: 180ms;
+  }
+  .intro-facet:nth-child(2) i {
+    animation: drift 23s ease-in-out -7s infinite alternate;
+  }
+  .intro-facet:nth-child(3) i {
+    animation: drift 31s ease-in-out -19s infinite alternate-reverse;
+  }
+  .intro-facet:nth-child(4) i {
+    animation: drift 19s ease-in-out -4s infinite alternate;
+  }
+  .intro-snow i {
+    display: block;
+    animation: flake var(--t) linear var(--delay) infinite;
+  }
+  .intro-bar i::after {
+    animation: breathe 1400ms ease-in-out infinite alternate;
+  }
+  .intro-swap {
+    animation: swap-in 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .intro-title {
+    animation: none;
+    transition:
+      opacity 600ms ease-out,
+      filter 600ms ease-out;
+  }
+  .intro-letter {
+    display: inline-block;
+    animation: letter-in 800ms cubic-bezier(0.23, 1, 0.32, 1) both;
+    animation-delay: calc(1000ms + var(--d) * 80ms);
+  }
+  /* the mark draws itself: the ring round from north, the roof and the logs settle into it, and the
+     window is lit */
+  .intro-emblem .emblem-ring {
     stroke-dasharray: 1;
-    animation: draw 560ms cubic-bezier(0.23, 1, 0.32, 1) both;
+    animation: draw 1300ms cubic-bezier(0.23, 1, 0.32, 1) 100ms both;
   }
-  .wordmark-intro .mark-logs {
-    animation-delay: 160ms;
+  .intro-emblem .emblem-roof {
+    animation: settle 800ms cubic-bezier(0.23, 1, 0.32, 1) 450ms both;
   }
-  .wordmark-intro .mark-smoke {
-    transform-box: fill-box;
-    transform-origin: 50% 100%;
-    animation: rise 900ms cubic-bezier(0.23, 1, 0.32, 1) 460ms both;
+  .intro-emblem .emblem-logs {
+    animation: settle 800ms cubic-bezier(0.23, 1, 0.32, 1) 600ms both;
   }
-  .wordmark-intro .wordmark-word {
-    animation: word-in 520ms cubic-bezier(0.77, 0, 0.175, 1) 380ms both;
+  .intro-emblem .emblem-window {
+    animation: lit 900ms linear 1300ms both;
   }
-  .wordmark-intro .wordmark-sub {
-    animation: sub-in 800ms cubic-bezier(0.2, 0.7, 0.2, 1) 820ms both;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .splash-snow {
-    display: none;
-  }
-}
-@keyframes splash-cut {
-  from {
-    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
-  }
-  to {
-    clip-path: polygon(124% 0, 100% 0, 100% 100%, 100% 100%);
-  }
-}
-@keyframes fade-out {
-  to {
+  .intro.is-leaving .intro-title {
     opacity: 0;
+    filter: blur(6px);
+  }
+  .intro.is-leaving .intro-snow {
+    opacity: 0;
+    transition-duration: 500ms;
+  }
+  /* leaving, the wind carries them on to the left, the nearest last: its far edge is the cut that
+     sweeps across onto the world */
+  .intro.is-leaving .intro-facet {
+    transform: translateX(-330vw);
+    transition: transform 1200ms cubic-bezier(0.7, 0, 0.2, 1);
+  }
+  .intro.is-leaving .intro-facet:nth-child(3) {
+    transition-delay: 60ms;
+  }
+  .intro.is-leaving .intro-facet:nth-child(2) {
+    transition-delay: 120ms;
+  }
+  .intro.is-leaving .intro-facet:nth-child(1) {
+    transition-delay: 180ms;
+  }
+}
+@keyframes grain {
+  0% {
+    translate: 0 0;
+  }
+  20% {
+    translate: -3% 2%;
+  }
+  40% {
+    translate: 2% -3%;
+  }
+  60% {
+    translate: -2% -1%;
+  }
+  80% {
+    translate: 3% 3%;
+  }
+}
+@keyframes breathe {
+  to {
+    opacity: 0.45;
+  }
+}
+@keyframes swap-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    translate: 0 4px;
+  }
+}
+@keyframes studio {
+  0% {
+    opacity: 0;
+    filter: blur(8px);
+    scale: 0.985;
+    animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  30%,
+  74% {
+    opacity: 1;
+    filter: blur(0);
+    scale: 1;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(5px);
+    scale: 1.01;
+  }
+}
+@keyframes studio-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  30%,
+  74% {
+    opacity: 1;
+  }
+}
+/* (the leaving cut is done by the facets; this only clears what's left once they've gone) */
+@keyframes intro-out {
+  0%,
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes drift {
+  from {
+    translate: -3vw 0;
+  }
+  to {
+    translate: 3vw 0;
+  }
+}
+/* down the slant, as the wind takes it */
+@keyframes flake {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: -27vh 108vh;
+  }
+}
+@keyframes letter-in {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    translate: 0 0.12em;
   }
 }
 @keyframes draw {
   from {
     stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes settle {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}
+/* a lamp being lit: it catches, gutters, then holds */
+@keyframes lit {
+  0% {
     opacity: 0;
   }
-  1% {
+  18% {
+    opacity: 0.9;
+  }
+  26% {
+    opacity: 0.15;
+  }
+  42% {
+    opacity: 1;
+  }
+  54% {
+    opacity: 0.55;
+  }
+  100% {
     opacity: 1;
   }
 }
-@keyframes rise {
+@keyframes fade-in {
   from {
-    scale: 1 0;
     opacity: 0;
-  }
-}
-@keyframes word-in {
-  from {
-    clip-path: inset(-0.3em 100% -0.3em 0);
   }
   to {
-    clip-path: inset(-0.3em -0.2em -0.3em 0);
-  }
-}
-@keyframes sub-in {
-  from {
-    opacity: 0;
-    letter-spacing: 0.7em;
+    opacity: 1;
   }
 }
 
